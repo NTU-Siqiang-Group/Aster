@@ -167,12 +167,12 @@ class RocksGraph {
     ColumnFamilyMetaData cf_meta;
     db_->GetColumnFamilyMetaData(adj_cf_, &cf_meta);
     std::cout << "Print LSM" << std::endl;
-    int largest_used_level = 0;
-    for (auto level : cf_meta.levels) {
-      if (level.files.size() > 0) {
-        largest_used_level = level.level;
-      }
-    }
+    // int largest_used_level = 0;
+    // for (auto level : cf_meta.levels) {
+    //   if (level.files.size() > 0) {
+    //     largest_used_level = level.level;
+    //   }
+    // }
 
     for (auto level : cf_meta.levels) {
       long level_size = 0;
