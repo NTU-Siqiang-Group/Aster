@@ -68,6 +68,7 @@ enum ValueType : unsigned char {
   kTypeCommitXIDAndTimestamp = 0x15,  // WAL only
   kTypeWideColumnEntity = 0x16,
   kTypeColumnFamilyWideColumnEntity = 0x17,  // WAL only
+  kTypeMergeDelete = 0x18, //Dingheng: this key type is for graph delete
   kTypeMaxValid,    // Should be after the last valid type, only used for
                     // validation
   kMaxValue = 0x7F  // Not used for storing records.

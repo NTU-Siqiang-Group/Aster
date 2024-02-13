@@ -14,6 +14,7 @@ if(WITH_TOOLS)
     db_sanity_test.cc
     write_stress.cc
     db_repl_stress.cc
+    graph_benchmark.cc
     dump/rocksdb_dump.cc
     dump/rocksdb_undump.cc)
   foreach(src ${TOOLS})

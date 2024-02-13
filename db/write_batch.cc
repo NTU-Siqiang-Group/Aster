@@ -488,6 +488,7 @@ Status WriteBatchInternal::Iterate(const WriteBatch* wb,
   if (begin > wb->rep_.size() || end > wb->rep_.size() || end < begin) {
     return Status::Corruption("Invalid start/end bounds for Iterate");
   }
+  //printf("WriteBatchInternal::Iterate\n");
   assert(begin <= end);
   Slice input(wb->rep_.data() + begin, static_cast<size_t>(end - begin));
   bool whole_batch =

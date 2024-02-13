@@ -1,93 +1,52 @@
-// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
-//  This source code is licensed under both the GPLv2 (found in the
-//  COPYING file in the root directory) and Apache 2.0 License
-//  (found in the LICENSE.Apache file in the root directory).
-
-#include <cstdio>
-#include <string>
-
-#include "rocksdb/db.h"
+#include "graph_benchmark_new.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/options.h"
-#include "rocksdb/slice.h"
+#include "rocksdb/filter_policy.h"
+#include "rocksdb/table.h"
 
-using ROCKSDB_NAMESPACE::DB;
-using ROCKSDB_NAMESPACE::Options;
-using ROCKSDB_NAMESPACE::PinnableSlice;
-using ROCKSDB_NAMESPACE::ReadOptions;
-using ROCKSDB_NAMESPACE::Status;
-using ROCKSDB_NAMESPACE::WriteBatch;
-using ROCKSDB_NAMESPACE::WriteOptions;
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <gflags/gflags.h>
 
-#if defined(OS_WIN)
-std::string kDBPath = "C:\\Windows\\TEMP\\rocksdb_simple_example";
-#else
-std::string kDBPath = "/tmp/rocksdb_simple_example";
-#endif
 
-int main() {
-  DB* db;
-  Options options;
-  // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
-  options.IncreaseParallelism();
-  options.OptimizeLevelStyleCompaction();
-  // create the DB if it's not already present
+DEFINE_bool(is_directed, true, "is directed graph");
+DEFINE_bool(is_lazy, true, "is lazy graph");
+DEFINE_bool(enable_bloom_filter, true, "enable bloom filter");
+
+void setup_bloom_filter(rocksdb::Options& options) {
+  auto table_options = options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
+  table_options->filter_policy.reset(rocksdb::NewBloomFilterPolicy(5, false));
+}
+
+int main(int argc, char** argv) {
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  rocksdb::Options options;
+  if (FLAGS_enable_bloom_filter) {
+    setup_bloom_filter(options);
+  }
+  options.level_compaction_dynamic_level_bytes = false;
   options.create_if_missing = true;
+  options.statistics = rocksdb::CreateDBStatistics();
+  options.write_buffer_size = 4 * 1024 * 1024;
+  rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, FLAGS_is_lazy);
+  
+  std::cout << "start loading graph" << std::endl;
+  auto load_start = std::chrono::steady_clock::now();
+  tool.LoadRandomGraph(100000, 1000000);
+  auto load_end = std::chrono::steady_clock::now();
+  std::cout << "finish loading graph: " << std::chrono::duration_cast<std::chrono::seconds>(load_end - load_start).count() << std::endl;
+  
+  auto exec_start = std::chrono::steady_clock::now();
+  tool.RandomLookups(10000, 100);
+  //tool.Execute("/home/junfeng/Desktop/dataset/soc-pokec/workload2.txt");
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "finish workload: " << std::chrono::duration_cast<std::chrono::seconds>(exec_end - exec_start).count() << std::endl;
+  
+  // std::string stat;
+  // tool.GetRocksGraphStats(stat);
+  // std::cout << stat << std::endl;
+  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
 
-  // open DB
-  Status s = DB::Open(options, kDBPath, &db);
-  assert(s.ok());
-
-  // Put key-value
-  s = db->Put(WriteOptions(), "key1", "value");
-  assert(s.ok());
-  std::string value;
-  // get value
-  s = db->Get(ReadOptions(), "key1", &value);
-  assert(s.ok());
-  assert(value == "value");
-
-  // atomically apply a set of updates
-  {
-    WriteBatch batch;
-    batch.Delete("key1");
-    batch.Put("key2", value);
-    s = db->Write(WriteOptions(), &batch);
-  }
-
-  s = db->Get(ReadOptions(), "key1", &value);
-  assert(s.IsNotFound());
-
-  db->Get(ReadOptions(), "key2", &value);
-  assert(value == "value");
-
-  {
-    PinnableSlice pinnable_val;
-    db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &pinnable_val);
-    assert(pinnable_val == "value");
-  }
-
-  {
-    std::string string_val;
-    // If it cannot pin the value, it copies the value to its internal buffer.
-    // The intenral buffer could be set during construction.
-    PinnableSlice pinnable_val(&string_val);
-    db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &pinnable_val);
-    assert(pinnable_val == "value");
-    // If the value is not pinned, the internal buffer must have the value.
-    assert(pinnable_val.IsPinned() || string_val == "value");
-  }
-
-  PinnableSlice pinnable_val;
-  s = db->Get(ReadOptions(), db->DefaultColumnFamily(), "key1", &pinnable_val);
-  assert(s.IsNotFound());
-  // Reset PinnableSlice after each use and before each reuse
-  pinnable_val.Reset();
-  db->Get(ReadOptions(), db->DefaultColumnFamily(), "key2", &pinnable_val);
-  assert(pinnable_val == "value");
-  pinnable_val.Reset();
-  // The Slice pointed by pinnable_val is not valid after this point
-
-  delete db;
-
-  return 0;
+  tool.printLSM();
 }

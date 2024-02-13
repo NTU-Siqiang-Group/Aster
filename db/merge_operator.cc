@@ -141,6 +141,7 @@ bool AssociativeMergeOperator::FullMergeV2(
   const Slice* existing_value = merge_in.existing_value;
   for (const auto& operand : merge_in.operand_list) {
     std::string temp_value;
+    //Dingheng: Merge Operater Called Here
     if (!Merge(merge_in.key, existing_value, operand, &temp_value,
                merge_in.logger)) {
       return false;

@@ -721,6 +721,7 @@ set(SOURCES
         db/write_controller.cc
         db/write_stall_stats.cc
         db/write_thread.cc
+        db/graph.cc
         env/composite_env.cc
         env/env.cc
         env/env_chroot.cc

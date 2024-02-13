@@ -82,9 +82,8 @@ Status MergeHelper::TimedFullMergeCommonImpl(
   {
     StopWatchNano timer(clock, statistics != nullptr);
     PERF_TIMER_GUARD(merge_operator_time_nanos);
-
+    //Dingheng: Merge Operater Entrance
     success = merge_operator->FullMergeV3(merge_in, &merge_out);
-
     RecordTick(statistics, MERGE_OPERATION_TOTAL_TIME,
                statistics ? timer.ElapsedNanos() : 0);
   }
@@ -116,7 +115,6 @@ Status MergeHelper::TimedFullMergeImpl(
     MergeOperator::OpFailureScope* op_failure_scope) {
   assert(result);
   assert(result_type);
-
   auto visitor = overload{
       [&](std::string&& new_value) -> Status {
         *result_type = kTypeValue;
@@ -520,6 +518,7 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
                            &merge_result, /* result_operand */ nullptr,
                            &merge_result_type, &op_failure_scope);
       } else if (ikey.type == kTypeValue) {
+        //Dingheng
         s = TimedFullMerge(user_merge_operator_, ikey.user_key, kPlainBaseValue,
                            iter->value(), merge_context_.GetOperands(), logger_,
                            stats_, clock_, /* update_num_ops_stats */ false,
@@ -672,7 +671,6 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       assert(false);
     }
   }
-
   if (merge_context_.GetNumOperands() == 0) {
     // we filtered out all the merge operands
     return s;
@@ -764,7 +762,6 @@ Status MergeHelper::MergeUntil(InternalIterator* iter,
       }
     }
   }
-
   return s;
 }
 

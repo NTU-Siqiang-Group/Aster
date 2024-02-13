@@ -152,6 +152,7 @@ void CompactionIterator::SeekToFirst() {
   PrepareOutput();
 }
 
+//Dingheng: merge entrance
 void CompactionIterator::Next() {
   // If there is a merge output, return it before continuing to process the
   // input.

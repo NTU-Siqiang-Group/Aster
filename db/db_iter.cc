@@ -1006,6 +1006,7 @@ bool DBIter::FindValueForCurrentKey() {
         valid_ = true;
       }
       return true;
+
     case kTypeMerge:
       current_entry_is_merged_ = true;
       if (last_not_merge_type == kTypeDeletion ||
@@ -1298,7 +1299,7 @@ bool DBIter::MergeWithNoBaseValue(const Slice& user_key) {
 bool DBIter::MergeWithPlainBaseValue(const Slice& value,
                                      const Slice& user_key) {
   // `op_failure_scope` (an output parameter) is not provided (set to nullptr)
-  // since a failure must be propagated regardless of its value.
+  // since a failure must be propagated regardless of its value. 
   ValueType result_type;
   const Status s = MergeHelper::TimedFullMerge(
       merge_operator_, user_key, MergeHelper::kPlainBaseValue, value,
