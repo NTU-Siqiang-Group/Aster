@@ -57,6 +57,8 @@ public class NativeLibraryLoader {
    */
   @SuppressWarnings("PMD.EmptyCatchBlock")
   public synchronized void loadLibrary(final String tmpDir) throws IOException {
+    System.out.println(System.getProperty("java.library.path"));
+     
     try {
       // try dynamic library
       System.loadLibrary(sharedLibraryName);
@@ -64,7 +66,10 @@ public class NativeLibraryLoader {
     } catch (final UnsatisfiedLinkError ule) {
       // ignore - try from static library
     }
-
+  System.out.println(sharedLibraryName);
+     System.out.println(jniLibraryName);
+     System.out.println(fallbackJniLibraryName);
+     System.out.println(tmpDir);
     try {
       // try static library
       System.loadLibrary(jniLibraryName);
@@ -72,7 +77,7 @@ public class NativeLibraryLoader {
     } catch (final UnsatisfiedLinkError ule) {
       // ignore - then try static library fallback or from jar
     }
-
+  
     if (fallbackJniLibraryName != null) {
       try {
         // try static library fallback
@@ -82,7 +87,7 @@ public class NativeLibraryLoader {
         // ignore - then try from jar
       }
     }
-
+    
     // try jar
     loadLibraryFromJar(tmpDir);
   }

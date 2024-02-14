@@ -13,8 +13,11 @@ import org.rocksdb.*;
 import org.rocksdb.util.SizeUnit;
 
 public class RocksDBSample {
+  
   static {
+    System.out.println("Load In");
     RocksDB.loadLibrary();
+    System.out.println("Load Out");
   }
 
   public static void main(final String[] args) {
