@@ -58,6 +58,13 @@ public class NativeLibraryLoader {
   @SuppressWarnings("PMD.EmptyCatchBlock")
   public synchronized void loadLibrary(final String tmpDir) throws IOException {
     //System.out.println(System.getProperty("java.library.path"));
+    // try {
+    //   // try dynamic library
+      System.loadLibrary("rocksdbjni-linux64");
+    //   return;
+    // } catch (final UnsatisfiedLinkError ule) {
+    //   // ignore - try from static library
+    // }
      
     try {
       // try dynamic library
