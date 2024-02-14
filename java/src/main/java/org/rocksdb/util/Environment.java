@@ -187,7 +187,7 @@ public class Environment {
       // } else {
       //   return String.format("%sjni-linux%s%s", name, arch, getLibcPostfix());
       // }
-      return String.format("%sjni-linux64");
+      return String.format("%sjni-linux64", name);
     } else if (isMac()) {
       if (is64Bit()) {
         final String arch;
