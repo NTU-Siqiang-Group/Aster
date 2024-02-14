@@ -89,7 +89,7 @@ public class NativeLibraryLoader {
     }
     
     // try jar
-    loadLibraryFromJar(tmpDir);
+    // loadLibraryFromJar(tmpDir);
   }
 
   /**
