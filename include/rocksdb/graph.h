@@ -1,6 +1,7 @@
 #pragma once
 #include "rocksdb/db.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/degree_approximate_counter.h"
 
 #include <iostream>
 
@@ -10,6 +11,10 @@ using edge_id_t = int64_t;
 
 #define KEY_TYPE_ADJENCENT_LIST 0x0
 #define KEY_TYPE_VERTEX_VAL 0x1
+
+#define FILTER_TYPE_NONE 0x0
+#define FILTER_TYPE_CMS 0x1
+#define FILTER_TYPE_MORRIS 0x2
 
 // a 4 byte value
 union Value {
@@ -123,9 +128,12 @@ class RocksGraph {
       return "AdjacentListMergeOp";
     }
   };
-  RocksGraph(Options& options, bool lazy=true): n(0), m(0), is_lazy_(lazy) {
+  RocksGraph(Options& options, bool lazy=true): n(0), m(0), is_lazy_(lazy), cms_() {
     if (lazy) {
       options.merge_operator.reset(new AdjacentListMergeOp);
+    }
+    if(filter_type_ == FILTER_TYPE_CMS){
+      cms_ = CountMinSketch(cms_delta, cms_epsilon);
     }
     options.create_missing_column_families = true;
     std::vector<ColumnFamilyDescriptor> column_families;
@@ -197,12 +205,18 @@ class RocksGraph {
     }
     std::cout << std::endl;
   }
+
  private:
   node_id_t random_walk(node_id_t start, float decay_factor=0.20);
   node_id_t n, m;
   DB* db_;
   bool is_lazy_;
+  int filter_type_ = 1;
   ColumnFamilyHandle* val_cf_, *adj_cf_;
+  CountMinSketch cms_;
+  double cms_delta = 0.1;
+  double cms_epsilon = 1.0/10000;
+
 };
 
 

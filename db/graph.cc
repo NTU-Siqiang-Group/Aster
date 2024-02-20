@@ -177,6 +177,8 @@ Status RocksGraph::AddVertex(node_id_t id) {
 }
 
 Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
+  cms_.UpdateSketch(from);
+
   m++;
   VertexKey v_out{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
   std::string key_out, value_out;

@@ -60,7 +60,7 @@ public class NativeLibraryLoader {
     //System.out.println(System.getProperty("java.library.path"));
     // try {
     //   // try dynamic library
-      System.loadLibrary("rocksdbjni-linux64");
+      //System.loadLibrary("rocksdbjni-linux64");
     //   return;
     // } catch (final UnsatisfiedLinkError ule) {
     //   // ignore - try from static library
