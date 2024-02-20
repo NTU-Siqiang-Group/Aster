@@ -1,0 +1,121 @@
+#pragma once
+#include <boost/functional/hash.hpp>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_int.hpp>
+#include <boost/random/uniform_real.hpp>
+#include <boost/random/variate_generator.hpp>
+#include <deque>
+#include <iostream>
+#include <limits>
+#include <string>
+#include <vector>
+#include <random>
+
+namespace ROCKSDB_NAMESPACE {
+using vertex_id_t = int64_t;
+
+class CountMinSketch {
+ public:
+  CountMinSketch(){
+
+  }
+
+  CountMinSketch(double delta, double epsilon)  // Initializes the data structures
+  {
+    table_width = ceil(exp(1) / epsilon);
+    table_height = ceil(log(1 / delta));
+    std::cout<<"table_width: "<<table_width<<"\t table_height"<<table_height<<std::endl;
+    table.resize(table_height);
+    for (size_t i = 0; i < table.size(); i++) {
+      table.at(i).resize(table_width, 0);
+    }
+  }
+
+  ~CountMinSketch()  // Cleans up remaining data structures
+  {
+    ClearAll();
+  }
+
+  void ClearAll()  // Clean Up Memory Structures
+  {
+    return;
+  }
+
+  void UpdateSketch(vertex_id_t v) {
+    std::vector<vertex_id_t> hashes = HashVertex(v);
+    for (size_t i = 0; i < hashes.size(); i++) {
+      // printf("%s=>H%d:%d\n",word.c_str(),i,hashes.at(i));
+      table[i][hashes.at(i)] += 1;
+    }
+  }
+
+  std::vector<vertex_id_t> HashVertex(vertex_id_t v) {
+    boost::hash<vertex_id_t> vertex_hash;
+    boost::mt19937 randGen(static_cast<unsigned int>(vertex_hash(v)));
+    boost::uniform_int<vertex_id_t> numrange(0, table_width - 1);
+    boost::variate_generator<boost::mt19937&, boost::uniform_int<vertex_id_t>> GetRand(
+        randGen, numrange);
+    std::vector<vertex_id_t> hashes;
+    for (vertex_id_t i = 0; i < table_height; i++) {
+      hashes.push_back(GetRand());
+    }
+    return hashes;
+  }
+
+  int GetVertexCount(vertex_id_t v) {
+    std::vector<vertex_id_t> hashes = HashVertex(v);
+    int mincount = std::numeric_limits<int>::max();
+    for (size_t i = 0; i < hashes.size(); i++) {
+      if (mincount > table[i][hashes.at(i)]) {
+        mincount = table[i][hashes.at(i)];
+      }
+    }
+    return mincount;
+  }
+
+ protected:
+  std::vector<std::vector<int>> table;
+  vertex_id_t table_height, table_width;
+};
+
+class MorrisCounter {
+  public:
+  MorrisCounter(vertex_id_t n): rand_gen(rd()){
+    counters.resize(n, 0);
+  }
+
+  MorrisCounter(): rand_gen(rd()){
+    counters.resize(1);
+  }
+
+  ~MorrisCounter(){
+
+  }
+
+  void AddCounter(vertex_id_t v) {
+    while(v > counters.size()){
+      vertex_id_t new_size = counters.size() * 2;
+      counters.resize(new_size, 0);
+    }
+    int exponent = ExtractExponents(counters[v]);
+    std::uniform_int_distribution<> dist(1, pow(2, exponent)); 
+    if (dist(rand_gen) == 1) { 
+      counters[v]++;
+    }
+
+  }
+
+  inline int ExtractExponents(unsigned char counter) {
+    unsigned char mask = static_cast<unsigned char>((1 << exponent_bits) - 1) << (8 - exponent_bits);
+    return (counter & mask) >> (8 - exponent_bits);
+  }
+
+  protected:
+  std::vector<unsigned char> counters;
+  int exponent_bits = 3;
+  int mantissa_bits = 5;
+  std::random_device rd;
+  boost::mt19937 rand_gen;
+};
+
+}  // namespace ROCKSDB_NAMESPACE
