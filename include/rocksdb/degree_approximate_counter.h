@@ -7,24 +7,39 @@
 #include <deque>
 #include <iostream>
 #include <limits>
+#include <random>
 #include <string>
 #include <vector>
-#include <random>
 
 namespace ROCKSDB_NAMESPACE {
 using vertex_id_t = int64_t;
 
+template <typename T>
+size_t calculateMemoryUsage(const std::vector<T>& vec) {
+    size_t size = vec.capacity() * sizeof(T); 
+    return size;
+}
+
+template <typename T>
+size_t calculateMemoryUsage(const std::vector<std::vector<T>>& vec) {
+    size_t size = vec.capacity() * sizeof(std::vector<T>); 
+    for (const auto& subVec : vec) {
+        size += calculateMemoryUsage(subVec); 
+    }
+    return size;
+}
+
 class CountMinSketch {
  public:
-  CountMinSketch(){
+  CountMinSketch() {}
 
-  }
-
-  CountMinSketch(double delta, double epsilon)  // Initializes the data structures
+  CountMinSketch(double delta,
+                 double epsilon)  // Initializes the data structures
   {
     table_width = ceil(exp(1) / epsilon);
     table_height = ceil(log(1 / delta));
-    std::cout<<"table_width: "<<table_width<<"\t table_height"<<table_height<<std::endl;
+    std::cout << "table_width: " << table_width << "\t table_height: "
+              << table_height << std::endl;
     table.resize(table_height);
     for (size_t i = 0; i < table.size(); i++) {
       table.at(i).resize(table_width, 0);
@@ -53,8 +68,8 @@ class CountMinSketch {
     boost::hash<vertex_id_t> vertex_hash;
     boost::mt19937 randGen(static_cast<unsigned int>(vertex_hash(v)));
     boost::uniform_int<vertex_id_t> numrange(0, table_width - 1);
-    boost::variate_generator<boost::mt19937&, boost::uniform_int<vertex_id_t>> GetRand(
-        randGen, numrange);
+    boost::variate_generator<boost::mt19937&, boost::uniform_int<vertex_id_t>>
+        GetRand(randGen, numrange);
     std::vector<vertex_id_t> hashes;
     for (vertex_id_t i = 0; i < table_height; i++) {
       hashes.push_back(GetRand());
@@ -73,44 +88,62 @@ class CountMinSketch {
     return mincount;
   }
 
+  size_t CalcMemoryUsage(){
+    return calculateMemoryUsage(table);
+  }
+
  protected:
   std::vector<std::vector<int>> table;
   vertex_id_t table_height, table_width;
 };
 
 class MorrisCounter {
-  public:
-  MorrisCounter(vertex_id_t n): rand_gen(rd()){
-    counters.resize(n, 0);
-  }
+ public:
+  MorrisCounter(vertex_id_t n) : rand_gen(rd()) { counters.resize(n, 0); }
 
-  MorrisCounter(): rand_gen(rd()){
-    counters.resize(1);
-  }
+  MorrisCounter() : rand_gen(rd()) { counters.resize(1); }
 
-  ~MorrisCounter(){
-
-  }
+  ~MorrisCounter() {}
 
   void AddCounter(vertex_id_t v) {
-    while(v > counters.size()){
+    while (static_cast<size_t>(v) > counters.size()) {
       vertex_id_t new_size = counters.size() * 2;
       counters.resize(new_size, 0);
     }
-    int exponent = ExtractExponents(counters[v]);
-    std::uniform_int_distribution<> dist(1, pow(2, exponent)); 
-    if (dist(rand_gen) == 1) { 
+    int exponent = ExtractExponent(counters[v]);
+    std::uniform_int_distribution<> dist(1, pow(2, exponent));
+    if (dist(rand_gen) == 1) {
       counters[v]++;
     }
-
   }
 
-  inline int ExtractExponents(unsigned char counter) {
-    unsigned char mask = static_cast<unsigned char>((1 << exponent_bits) - 1) << (8 - exponent_bits);
+  inline int ExtractExponent(unsigned char counter) {
+    unsigned char mask = static_cast<unsigned char>((1 << exponent_bits) - 1)
+                         << (8 - exponent_bits);
     return (counter & mask) >> (8 - exponent_bits);
   }
 
-  protected:
+  inline int ExtractMantissa(unsigned char counter) {
+    unsigned char mask = static_cast<unsigned char>(1 << mantissa_bits) - 1;
+    ;
+    return (counter & mask);
+  }
+
+  int GetVertexCount(vertex_id_t v) {
+    if (static_cast<size_t>(v) > counters.size()) {
+      return 0;
+    }
+    int exponent = ExtractExponent(counters[v]);
+    int mantissa = ExtractMantissa(counters[v]);
+    return (pow(2, exponent) - 1) * pow(2, mantissa_bits) +
+           pow(2, exponent) * mantissa;
+  }
+
+  size_t CalcMemoryUsage(){
+    return calculateMemoryUsage(counters);
+  }
+
+ protected:
   std::vector<unsigned char> counters;
   int exponent_bits = 3;
   int mantissa_bits = 5;

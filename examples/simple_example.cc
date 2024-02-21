@@ -33,12 +33,13 @@ int main(int argc, char** argv) {
   
   std::cout << "start loading graph" << std::endl;
   auto load_start = std::chrono::steady_clock::now();
-  tool.LoadRandomGraph(100000, 1000000);
+  tool.LoadRandomGraph(10000, 1000000);
   auto load_end = std::chrono::steady_clock::now();
   std::cout << "finish loading graph: " << std::chrono::duration_cast<std::chrono::seconds>(load_end - load_start).count() << std::endl;
   
   auto exec_start = std::chrono::steady_clock::now();
-  tool.RandomLookups(10000, 100);
+  //tool.RandomLookups(10000, 100);
+  tool.CompareDegreeFilterAccuracy(10000, 10000);
   //tool.Execute("/home/junfeng/Desktop/dataset/soc-pokec/workload2.txt");
   auto exec_end = std::chrono::steady_clock::now();
   std::cout << "finish workload: " << std::chrono::duration_cast<std::chrono::seconds>(exec_end - exec_start).count() << std::endl;
