@@ -92,8 +92,8 @@ class GraphBenchmarkTool {
       std::string file_;
       std::ifstream fin_;
   };
-  GraphBenchmarkTool(Options& options, bool is_directed, bool is_lazy): is_directed_(is_directed), is_lazy_(is_lazy) {
-    graph_ = CreateRocksGraph(options, is_lazy);
+  GraphBenchmarkTool(Options& options, bool is_directed, int policy): is_directed_(is_directed), policy_(policy) {
+    graph_ = CreateRocksGraph(options, policy_);
   }
 
   void LoadGraph(const std::string& graph_file) {
@@ -205,7 +205,7 @@ class GraphBenchmarkTool {
   RocksGraph* graph_;
   GraphBenchProfiler profiler_;
   bool is_directed_;
-  bool is_lazy_;
+  int policy_;
 };
 
 }

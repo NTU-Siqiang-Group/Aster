@@ -9,6 +9,10 @@ namespace ROCKSDB_NAMESPACE {
 using node_id_t = int64_t;
 using edge_id_t = int64_t;
 
+#define EDGE_UPDATE_EAGER 0x0
+#define EDGE_UPDATE_LAZY 0x1
+#define EDGE_UPDATE_ADAPTIVE 0x2
+
 #define KEY_TYPE_ADJENCENT_LIST 0x0
 #define KEY_TYPE_VERTEX_VAL 0x1
 
@@ -125,7 +129,9 @@ void inline free_edges(Edges* edges) {
 
 class RocksGraph {
  public:
-  int filter_type_ = FILTER_TYPE_ALL;
+  int filter_type_ = FILTER_TYPE_NONE;
+  int edge_update_policy_ = EDGE_UPDATE_EAGER;
+  double update_ratio = 0.5;
 
   class AdjacentListMergeOp : public AssociativeMergeOperator {
    public:
@@ -138,9 +144,9 @@ class RocksGraph {
                               Logger* logger) const override;
     virtual const char* Name() const override { return "AdjacentListMergeOp"; }
   };
-  RocksGraph(Options& options, bool lazy = true)
-      : n(0), m(0), is_lazy_(lazy), cms_(), mor_() {
-    if (lazy) {
+  RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE)
+      : edge_update_policy_(edge_update_policy), n(0), m(0), cms_(), mor_() {
+    if (edge_update_policy != EDGE_UPDATE_EAGER) {
       options.merge_operator.reset(new AdjacentListMergeOp);
     }
     if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
@@ -166,8 +172,9 @@ class RocksGraph {
   ~RocksGraph() {
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(val_cf_);
+    db_->SyncWAL();
     db_->Close();
-    delete db_;
+    //delete db_;
   }
   node_id_t CountVertex();
   node_id_t CountEdge();
@@ -176,7 +183,9 @@ class RocksGraph {
   Status DeleteEdge(node_id_t from, node_id_t to);
   Status GetAllEdges(node_id_t src, Edges* edges);
   node_id_t GetOutDegree(node_id_t id);
-  node_id_t GetOutDegreeApproximate(node_id_t id, int filter_type_manual);
+  node_id_t GetInDegree(node_id_t id);
+  node_id_t GetOutDegreeApproximate(node_id_t id, int filter_type_manual = 0);
+  node_id_t GetInDegreeApproximate(node_id_t id, int filter_type_manual = 0);
   Status SimpleWalk(node_id_t start, float decay_factor = 0.20);
   void GetRocksDBStats(std::string& stat) {
     db_->GetProperty("rocksdb.stats", &stat);
@@ -189,6 +198,18 @@ class RocksGraph {
       return mor_.CalcMemoryUsage();
     }
     return 0;
+  }
+
+  int AdaptPolicy(node_id_t src, bool is_out_edge = true){
+    node_id_t block_size = 2<<11;
+    node_id_t thereshold = (block_size - sizeof(node_id_t)) / sizeof(node_id_t);
+    printf("thereshold = %d\n", (int)thereshold);
+    node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src) : GetInDegreeApproximate(src);
+    if(degree < thereshold){
+      return EDGE_UPDATE_EAGER;
+    }else{
+      return EDGE_UPDATE_LAZY;
+    }
   }
 
   // Status GetVertexVal(node_id_t id, Value* val);
@@ -234,12 +255,12 @@ class RocksGraph {
   node_id_t random_walk(node_id_t start, float decay_factor = 0.20);
   node_id_t n, m;
   DB* db_;
-  bool is_lazy_;
+  //bool is_lazy_;
   ColumnFamilyHandle *val_cf_, *adj_cf_;
   CountMinSketch cms_;
   MorrisCounter mor_;
   double cms_delta = 0.1;
-  double cms_epsilon = 1.0 / 10000;
+  double cms_epsilon = 1.0 / 12000;
 };
 
 }  // namespace ROCKSDB_NAMESPACE
