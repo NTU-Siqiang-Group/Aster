@@ -181,7 +181,7 @@ node_id_t RocksGraph::random_walk(node_id_t start, float decay_factor) {
     Edges edges;
     std::string key;
     std::string value;
-    encode_node(VertexKey{.id = cur, .type = KEY_TYPE_ADJENCENT_LIST}, &key);
+    encode_node(VertexKey{.id = cur}, &key);
     Status s = db_->Get(ReadOptions(), adj_cf_, key, &value);
     if (!s.ok()) {
       return 0;
@@ -206,7 +206,7 @@ node_id_t RocksGraph::CountEdge() { return m; }
 
 Status RocksGraph::AddVertex(node_id_t id) {
   n++;
-  VertexKey v{.id = id, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v{.id = id};
   std::string key, value;
   encode_node(v, &key);
   Edges edges{.num_edges_out = 0};
@@ -218,17 +218,20 @@ Status RocksGraph::AddVertex(node_id_t id) {
 
 Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
-    cms_.UpdateSketch(from);
+    cms_out.UpdateSketch(from);
+    cms_in.UpdateSketch(to);
   }
   if (filter_type_ == FILTER_TYPE_MORRIS || FILTER_TYPE_ALL) {
-    mor_.AddCounter(from);
+    mor_out.AddCounter(from);
+    mor_in.AddCounter(to);
   }
 
   Status s;
   m++;
 
   // we insert vertex 'to' into the out edge list of vertex 'from' at first
-  VertexKey v_out{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
+  //VertexKey v_out{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v_out{.id = from};
   std::string key_out, value_out;
   encode_node(v_out, &key_out);
 
@@ -273,7 +276,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     }
   }
 
-  VertexKey v_in{.id = to, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v_in{.id = to};
   std::string key_in, value_in;
   encode_node(v_in, &key_in);
   int in_policy = edge_update_policy_;
@@ -320,7 +323,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
 Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   Status s;
   m--;
-  VertexKey v{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v{.id = from};
   std::string key_out, value_out;
   encode_node(v, &key_out);
     int out_policy = edge_update_policy_;
@@ -363,7 +366,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     return db_->Put(WriteOptions(), adj_cf_, key_out, new_value);
   }
 
-  VertexKey v_in{.id = to, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v_in{.id = to};
   std::string key_in, value_in;
   encode_node(v_in, &key_in);
   int in_policy = edge_update_policy_;
@@ -416,7 +419,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
 }
 
 Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
-  VertexKey v{.id = src, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v{.id = src};
   std::string key;
   encode_node(v, &key);
   std::string value;
@@ -429,7 +432,7 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
 }
 
 node_id_t RocksGraph::GetOutDegree(node_id_t src) {
-  VertexKey v{.id = src, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v{.id = src};
   std::string key;
   encode_node(v, &key);
   std::string value;
@@ -440,7 +443,7 @@ node_id_t RocksGraph::GetOutDegree(node_id_t src) {
 }
 
 node_id_t RocksGraph::GetInDegree(node_id_t src) {
-  VertexKey v{.id = src, .type = KEY_TYPE_ADJENCENT_LIST};
+  VertexKey v{.id = src};
   std::string key;
   encode_node(v, &key);
   std::string value;
@@ -459,10 +462,10 @@ node_id_t RocksGraph::GetOutDegreeApproximate(node_id_t src,
   }
   if (filter_type_manual == FILTER_TYPE_CMS ||
       (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_CMS)) {
-    return cms_.GetVertexCount(src);
+    return cms_out.GetVertexCount(src);
   } else if (filter_type_manual == FILTER_TYPE_MORRIS ||
              (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_MORRIS)) {
-    return mor_.GetVertexCount(src);
+    return mor_out.GetVertexCount(src);
   }
   return 0;
 }
@@ -476,10 +479,10 @@ node_id_t RocksGraph::GetInDegreeApproximate(node_id_t src,
   }
   if (filter_type_manual == FILTER_TYPE_CMS ||
       (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_CMS)) {
-    return cms_.GetVertexCount(src);
+    return cms_in.GetVertexCount(src);
   } else if (filter_type_manual == FILTER_TYPE_MORRIS ||
              (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_MORRIS)) {
-    return mor_.GetVertexCount(src);
+    return mor_in.GetVertexCount(src);
   }
   return 0;
 }

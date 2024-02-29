@@ -44,7 +44,7 @@ struct Edges {
 // 8 + 4 byte
 struct VertexKey {
   node_id_t id;
-  int type;
+  //int type;
 };
 
 // void decode_node(VertexKey* v, const std::string& key);
@@ -59,10 +59,10 @@ void inline encode_node(VertexKey v, std::string* key) {
   for (int i = byte_to_fill - 1; i >= 0; i--) {
     key->push_back((v.id >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
   }
-  byte_to_fill = sizeof(v.type);
-  for (int i = byte_to_fill - 1; i >= 0; i--) {
-    key->push_back((v.type >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
-  }
+  // byte_to_fill = sizeof(v.type);
+  // for (int i = byte_to_fill - 1; i >= 0; i--) {
+  //   key->push_back((v.type >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+  // }
 }
 
 void inline decode_node(VertexKey* v, const std::string& key) {
@@ -145,12 +145,13 @@ class RocksGraph {
     virtual const char* Name() const override { return "AdjacentListMergeOp"; }
   };
   RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE)
-      : edge_update_policy_(edge_update_policy), n(0), m(0), cms_(), mor_() {
+      : edge_update_policy_(edge_update_policy), n(0), m(0), cms_out(), mor_out(), cms_in(), mor_in() {
     if (edge_update_policy != EDGE_UPDATE_EAGER) {
       options.merge_operator.reset(new AdjacentListMergeOp);
     }
     if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
-      cms_ = CountMinSketch(cms_delta, cms_epsilon);
+      cms_out = CountMinSketch(cms_delta, cms_epsilon);
+      cms_in = CountMinSketch(cms_delta, cms_epsilon);
     }
     // else if(filter_type_ == FILTER_TYPE_MORRIS){
     // }
@@ -193,9 +194,9 @@ class RocksGraph {
 
   size_t GetDegreeFilterSize(int filter_type){
     if(filter_type == FILTER_TYPE_CMS){
-      return cms_.CalcMemoryUsage();
+      return cms_out.CalcMemoryUsage();
     }else if(filter_type == FILTER_TYPE_MORRIS){
-      return mor_.CalcMemoryUsage();
+      return mor_out.CalcMemoryUsage();
     }
     return 0;
   }
@@ -225,13 +226,11 @@ class RocksGraph {
     //     largest_used_level = level.level;
     //   }
     // }
-
     for (auto level : cf_meta.levels) {
       long level_size = 0;
       for (auto file : level.files) {
         level_size += file.size;
       }
-
       std::cout << "level " << level.level << ".  Size " << level_size
                 << " bytes. " << std::endl;
       // for (auto file : level.files) {
@@ -257,8 +256,10 @@ class RocksGraph {
   DB* db_;
   //bool is_lazy_;
   ColumnFamilyHandle *val_cf_, *adj_cf_;
-  CountMinSketch cms_;
-  MorrisCounter mor_;
+  CountMinSketch cms_out;
+  MorrisCounter mor_out;
+  CountMinSketch cms_in;
+  MorrisCounter mor_in;
   double cms_delta = 0.1;
   double cms_epsilon = 1.0 / 12000;
 };
