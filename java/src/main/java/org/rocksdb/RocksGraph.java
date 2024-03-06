@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.rocksdb.util.Environment;
 
 /**
- * A RocksDB is a persistent ordered map from keys to values.  It is safe for
+ * A RocksDB is a persistent ordered map from keys to values. It is safe for
  * concurrent access from multiple threads without any external synchronization.
  * All methods of this class could potentially throw RocksDBException, which
  * indicates sth wrong at the RocksDB library side and the call failed.
@@ -29,18 +29,16 @@ public class RocksGraph extends RocksObject {
     LOADED
   }
 
-  private static final AtomicReference<LibraryState> libraryLoaded =
-      new AtomicReference<>(LibraryState.NOT_LOADED);
+  private static final AtomicReference<LibraryState> libraryLoaded = new AtomicReference<>(LibraryState.NOT_LOADED);
 
   static {
     RocksDB.loadLibrary();
   }
 
-  static final String PERFORMANCE_OPTIMIZATION_FOR_A_VERY_SPECIFIC_WORKLOAD =
-      "Performance optimization for a very specific workload";
+  static final String PERFORMANCE_OPTIMIZATION_FOR_A_VERY_SPECIFIC_WORKLOAD = "Performance optimization for a very specific workload";
 
   private final List<ColumnFamilyHandle> ownedColumnFamilyHandles = new ArrayList<>();
- 
+
   /**
    * Private constructor.
    *
@@ -50,19 +48,62 @@ public class RocksGraph extends RocksObject {
     super(nativeHandle);
   }
 
+  public static RocksGraph open(final Options options, final int policy)
+      throws RocksDBException {
+    final RocksGraph db = new RocksGraph(Reinitialize(options.nativeHandle_, policy));
+    // db.storeOptionsInstance(options);
+    return db;
+  }
+
+  public void terminate() throws RocksDBException {
+    try {
+      Terminate(nativeHandle_);
+    } finally {
+      disposeInternal(nativeHandle_);
+    }
+  }
+
+  public void AddEdge(final long source_id, final long target_id) throws RocksDBException {
+    AddEdge(nativeHandle_, source_id, target_id);
+  }
+
+  public void DeleteEdge(final long source_id, final long target_id) throws RocksDBException {
+    DeleteEdge(nativeHandle_, source_id, target_id);
+  }
+
+  public long[] GetOutNeighbours(final long id) throws RocksDBException {
+    return GetOutNeighbours(nativeHandle_, id);
+  }
+
+  public long[] GetInNeighbours(final long id) throws RocksDBException {
+    return GetInNeighbours(nativeHandle_, id);
+  }
+
   private static native long Reinitialize(final long optionsHandle, final int policy)
       throws RocksDBException;
+
   private native void AddEdge(final long handle, final long source_id,
       final long target_id) throws RocksDBException;
+
   private native void DeleteEdge(final long handle, final long source_id,
       final long target_id) throws RocksDBException;
+
   private native long[] GetOutNeighbours(final long handle, final long id) throws RocksDBException;
+
   private native long[] GetInNeighbours(final long handle, final long id) throws RocksDBException;
+
   private native long[][] GetAllNeighbours(final long handle, final long id) throws RocksDBException;
+
   private native int InDegree(final long handle, final long id) throws RocksDBException;
+
   private native int OutDegree(final long handle, final long id) throws RocksDBException;
+
   private native int InDegreeFast(final long handle, final long id) throws RocksDBException;
+
   private native int OutDegreeFast(final long handle, final long id) throws RocksDBException;
+
   private static native void Terminate(final long handle) throws RocksDBException;
-  @Override protected native void disposeInternal(final long handle);
+
+  @Override
+  protected native void disposeInternal(final long handle);
 }
