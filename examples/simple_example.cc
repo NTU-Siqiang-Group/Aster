@@ -22,7 +22,7 @@ void setup_bloom_filter(rocksdb::Options& options) {
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-  int edge_update_policy = EDGE_UPDATE_EAGER;
+  int edge_update_policy = EDGE_UPDATE_LAZY;
 
   rocksdb::Options options;
   if (FLAGS_enable_bloom_filter) {

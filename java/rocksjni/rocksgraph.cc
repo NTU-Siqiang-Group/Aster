@@ -49,6 +49,24 @@ jlong Java_org_rocksdb_RocksGraph_Reinitialize(JNIEnv*, jclass,
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    AddVertex
+ * Signature: (JJ)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddVertex(JNIEnv* env,
+                                                             jobject,
+                                                             jlong jdb_handle,
+                                                             jlong id) {
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  ROCKSDB_NAMESPACE::Status s;
+  s = graph_db->AddVertex(static_cast<ROCKSDB_NAMESPACE::node_id_t>(id));
+  if (!s.ok()) {
+    ROCKSDB_NAMESPACE::RocksDBExceptionJni::ThrowNew(env, s);
+  }
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    AddEdge
  * Signature: (JJJ)V
  */
@@ -85,6 +103,30 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_DeleteEdge(
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    CountVertex
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountVertex
+  (JNIEnv *, jobject, jlong jdb_handle){
+    ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+    return static_cast<jlong>(graph_db->CountVertex());
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    CountEdge
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountEdge
+  (JNIEnv *, jobject, jlong jdb_handle){
+    ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+    return static_cast<jlong>(graph_db->CountEdge());
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    GetOutNeighbours
  * Signature: (JJ)[J
  */
@@ -105,7 +147,7 @@ JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetOutNeighbours(
   std::unique_ptr<jlong[]> results =
       std::unique_ptr<jlong[]>(new jlong[resultsLen]);
   for (ROCKSDB_NAMESPACE::node_id_t i = 0; i < edges.num_edges_out; i++) {
-    results[i] = static_cast<jsize>(edges.nxts_out[i].nxt);
+    results[i] = static_cast<jlong>(edges.nxts_out[i].nxt);
   }
   jlongArray jresults = env->NewLongArray(resultsLen);
   env->SetLongArrayRegion(jresults, 0, resultsLen, results.get());
@@ -139,7 +181,7 @@ JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetInNeighbours(
   std::unique_ptr<jlong[]> results =
       std::unique_ptr<jlong[]>(new jlong[resultsLen]);
   for (ROCKSDB_NAMESPACE::node_id_t i = 0; i < edges.num_edges_in; i++) {
-    results[i] = static_cast<jsize>(edges.nxts_in[i].nxt);
+    results[i] = static_cast<jlong>(edges.nxts_in[i].nxt);
   }
   jlongArray jresults = env->NewLongArray(resultsLen);
   env->SetLongArrayRegion(jresults, 0, resultsLen, results.get());

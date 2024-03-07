@@ -63,6 +63,10 @@ public class RocksGraph extends RocksObject {
     }
   }
 
+  public void AddVertex(final long id) throws RocksDBException {
+    AddVertex(nativeHandle_, id);
+  }
+
   public void AddEdge(final long source_id, final long target_id) throws RocksDBException {
     AddEdge(nativeHandle_, source_id, target_id);
   }
@@ -79,14 +83,29 @@ public class RocksGraph extends RocksObject {
     return GetInNeighbours(nativeHandle_, id);
   }
 
+  public long CountVertex() throws RocksDBException {
+    return CountVertex(nativeHandle_);
+  }
+
+  public long CountEdge() throws RocksDBException {
+    return CountEdge(nativeHandle_);
+  }
+
   private static native long Reinitialize(final long optionsHandle, final int policy)
       throws RocksDBException;
+
+  private native void AddVertex(final long handle,
+      final long id) throws RocksDBException;
 
   private native void AddEdge(final long handle, final long source_id,
       final long target_id) throws RocksDBException;
 
   private native void DeleteEdge(final long handle, final long source_id,
       final long target_id) throws RocksDBException;
+
+  private native long CountVertex(final long handle) throws RocksDBException;
+
+  private native long CountEdge(final long handle) throws RocksDBException;
 
   private native long[] GetOutNeighbours(final long handle, final long id) throws RocksDBException;
 

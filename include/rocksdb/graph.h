@@ -170,6 +170,7 @@ class RocksGraph {
     adj_cf_ = handles[0];
     val_cf_ = handles[1];
   }
+  
   ~RocksGraph() {
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(val_cf_);

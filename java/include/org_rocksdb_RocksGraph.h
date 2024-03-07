@@ -19,6 +19,14 @@ JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_Reinitialize
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    AddVertex
+ * Signature: (JJ)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddVertex
+  (JNIEnv *, jobject, jlong, jlong);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    AddEdge
  * Signature: (JJJ)V
  */
@@ -32,6 +40,22 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddEdge
  */
 JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_DeleteEdge
   (JNIEnv *, jobject, jlong, jlong, jlong);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    CountVertex
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountVertex
+  (JNIEnv *, jobject, jlong);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    CountEdge
+ * Signature: (J)J
+ */
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountEdge
+  (JNIEnv *, jobject, jlong);
 
 /*
  * Class:     org_rocksdb_RocksGraph
