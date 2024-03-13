@@ -267,15 +267,15 @@ class GraphBenchmarkTool {
         std::cout << "get error: " << s.ToString() << std::endl;
         exit(0);
       }
-      std::cout << from << " ||\t";
-      for (node_id_t i = 0; i < edges.num_edges_out; i++) {
-        std::cout << edges.nxts_out[i].nxt << "\t";
-      }
-      std::cout<<" ||\t";
-      for (node_id_t i = 0; i < edges.num_edges_in; i++) {
-        std::cout << edges.nxts_in[i].nxt << "\t";
-      }
-      std::cout << std::endl;
+      // std::cout << from << " ||\t";
+      // for (node_id_t i = 0; i < edges.num_edges_out; i++) {
+      //   std::cout << edges.nxts_out[i].nxt << "\t";
+      // }
+      // std::cout<<" ||\t";
+      // for (node_id_t i = 0; i < edges.num_edges_in; i++) {
+      //   std::cout << edges.nxts_in[i].nxt << "\t";
+      // }
+      // std::cout << std::endl;
     }
     return;
   }

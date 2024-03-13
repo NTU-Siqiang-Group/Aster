@@ -11,7 +11,7 @@
 #include "rocksdb/table.h"
 
 DEFINE_bool(is_directed, true, "is directed graph");
-DEFINE_bool(enable_bloom_filter, true, "enable bloom filter");
+DEFINE_bool(enable_bloom_filter, false, "enable bloom filter");
 
 void setup_bloom_filter(rocksdb::Options& options) {
   auto table_options =
@@ -34,27 +34,29 @@ int main(int argc, char** argv) {
   options.write_buffer_size = 4 * 1024 * 1024;
   rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy);
 
-  std::cout << "start loading graph" << std::endl;
+  int load_n = 1000000;
+  int load_m = 10000000;
   auto load_start = std::chrono::steady_clock::now();
-  tool.LoadRandomGraph(10000, 100000);
+  tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraph(40000, 2.5);
       
   auto load_end = std::chrono::steady_clock::now();
-  std::cout << "finish loading graph: "
-            << std::chrono::duration_cast<std::chrono::seconds>(load_end -
+  std::cout << "put latency: "
+            << std::chrono::duration_cast<std::chrono::nanoseconds>(load_end -
                                                                 load_start)
-                   .count()
+                   .count() / (double) load_m
             << std::endl;
 
   auto exec_start = std::chrono::steady_clock::now();
-  tool.RandomLookups(10000, 100);
+  int get_n = 1000000;
+  tool.RandomLookups(load_n, get_n);
   // tool.CompareDegreeFilterAccuracy(40000, 40000);
   // tool.Execute("/home/junfeng/Desktop/dataset/soc-pokec/workload2.txt");
   auto exec_end = std::chrono::steady_clock::now();
-  std::cout << "finish workload: "
-            << std::chrono::duration_cast<std::chrono::seconds>(exec_end -
+  std::cout << "get latency: "
+            << std::chrono::duration_cast<std::chrono::nanoseconds>(exec_end -
                                                                 exec_start)
-                   .count()
+                   .count() / (double) get_n
             << std::endl;
 
   // std::string stat;

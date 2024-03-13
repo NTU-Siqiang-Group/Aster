@@ -3,6 +3,7 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/degree_approximate_counter.h"
+#include "rocksdb/graph_encoder.h"
 #include "rocksdb/merge_operator.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -15,6 +16,9 @@ using edge_id_t = int64_t;
 
 #define KEY_TYPE_ADJENCENT_LIST 0x0
 #define KEY_TYPE_VERTEX_VAL 0x1
+
+#define ENCODING_TYPE_NONE 0x0
+#define ENCODING_TYPE_EFP 0x1
 
 #define FILTER_TYPE_NONE 0x0
 #define FILTER_TYPE_CMS 0x1
@@ -130,6 +134,7 @@ void inline free_edges(Edges* edges) {
 class RocksGraph {
  public:
   int filter_type_ = FILTER_TYPE_NONE;
+  int encoding_type_ = ENCODING_TYPE_NONE;
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
   double update_ratio = 0.5;
 
