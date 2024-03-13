@@ -11,7 +11,7 @@
 #include "rocksdb/table.h"
 
 DEFINE_bool(is_directed, true, "is directed graph");
-DEFINE_bool(enable_bloom_filter, false, "enable bloom filter");
+DEFINE_bool(enable_bloom_filter, true, "enable bloom filter");
 
 void setup_bloom_filter(rocksdb::Options& options) {
   auto table_options =
@@ -34,8 +34,8 @@ int main(int argc, char** argv) {
   options.write_buffer_size = 4 * 1024 * 1024;
   rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy);
 
-  int load_n = 1000000;
-  int load_m = 10000000;
+  int load_n = 10000;
+  int load_m = 10000;
   auto load_start = std::chrono::steady_clock::now();
   tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraph(40000, 2.5);

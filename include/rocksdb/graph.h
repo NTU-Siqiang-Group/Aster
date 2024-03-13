@@ -5,6 +5,9 @@
 #include "rocksdb/degree_approximate_counter.h"
 #include "rocksdb/graph_encoder.h"
 #include "rocksdb/merge_operator.h"
+#include "rocksdb/filter_policy.h"
+#include "rocksdb/options.h"
+#include "rocksdb/table.h"
 
 namespace ROCKSDB_NAMESPACE {
 using node_id_t = int64_t;
@@ -48,7 +51,7 @@ struct Edges {
 // 8 + 4 byte
 struct VertexKey {
   node_id_t id;
-  //int type;
+  // int type;
 };
 
 // void decode_node(VertexKey* v, const std::string& key);
@@ -136,6 +139,7 @@ class RocksGraph {
   int filter_type_ = FILTER_TYPE_NONE;
   int encoding_type_ = ENCODING_TYPE_NONE;
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
+  bool auto_reinitialize = false;
   double update_ratio = 0.5;
 
   class AdjacentListMergeOp : public AssociativeMergeOperator {
@@ -150,10 +154,20 @@ class RocksGraph {
     virtual const char* Name() const override { return "AdjacentListMergeOp"; }
   };
   RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE)
-      : edge_update_policy_(edge_update_policy), n(0), m(0), cms_out(), mor_out(), cms_in(), mor_in() {
+      : edge_update_policy_(edge_update_policy),
+        n(0),
+        m(0),
+        cms_out(),
+        mor_out(),
+        cms_in(),
+        mor_in() {
     if (edge_update_policy != EDGE_UPDATE_EAGER) {
       options.merge_operator.reset(new AdjacentListMergeOp);
     }
+    auto table_options =
+        options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
+    table_options->filter_policy.reset(rocksdb::NewBloomFilterPolicy(5, false));
+    options.level_compaction_dynamic_level_bytes = false;
     if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
       cms_out = CountMinSketch(cms_delta, cms_epsilon);
       cms_in = CountMinSketch(cms_delta, cms_epsilon);
@@ -166,7 +180,9 @@ class RocksGraph {
     column_families.emplace_back("vertex_val", options);
     std::vector<ColumnFamilyHandle*> handles;
     std::string kDBPath = "/tmp/demo";
-    DestroyDB(kDBPath, options);
+    if(auto_reinitialize){
+      DestroyDB(kDBPath, options);
+    }
     Status s = DB::Open(options, kDBPath, column_families, &handles, &db_);
     if (!s.ok()) {
       std::cout << s.ToString() << std::endl;
@@ -175,13 +191,13 @@ class RocksGraph {
     adj_cf_ = handles[0];
     val_cf_ = handles[1];
   }
-  
+
   ~RocksGraph() {
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(val_cf_);
     db_->SyncWAL();
     db_->Close();
-    //delete db_;
+    // delete db_;
   }
   node_id_t CountVertex();
   node_id_t CountEdge();
@@ -198,23 +214,24 @@ class RocksGraph {
     db_->GetProperty("rocksdb.stats", &stat);
   }
 
-  size_t GetDegreeFilterSize(int filter_type){
-    if(filter_type == FILTER_TYPE_CMS){
+  size_t GetDegreeFilterSize(int filter_type) {
+    if (filter_type == FILTER_TYPE_CMS) {
       return cms_out.CalcMemoryUsage();
-    }else if(filter_type == FILTER_TYPE_MORRIS){
+    } else if (filter_type == FILTER_TYPE_MORRIS) {
       return mor_out.CalcMemoryUsage();
     }
     return 0;
   }
 
-  int AdaptPolicy(node_id_t src, bool is_out_edge = true){
-    node_id_t block_size = 2<<11;
+  int AdaptPolicy(node_id_t src, bool is_out_edge = true) {
+    node_id_t block_size = 2 << 11;
     node_id_t thereshold = (block_size - sizeof(node_id_t)) / sizeof(node_id_t);
     printf("thereshold = %d\n", (int)thereshold);
-    node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src) : GetInDegreeApproximate(src);
-    if(degree < thereshold){
+    node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src)
+                                   : GetInDegreeApproximate(src);
+    if (degree < thereshold) {
       return EDGE_UPDATE_EAGER;
-    }else{
+    } else {
       return EDGE_UPDATE_LAZY;
     }
   }
@@ -260,7 +277,7 @@ class RocksGraph {
   node_id_t random_walk(node_id_t start, float decay_factor = 0.20);
   node_id_t n, m;
   DB* db_;
-  //bool is_lazy_;
+  // bool is_lazy_;
   ColumnFamilyHandle *val_cf_, *adj_cf_;
   CountMinSketch cms_out;
   MorrisCounter mor_out;
