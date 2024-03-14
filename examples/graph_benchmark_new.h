@@ -27,8 +27,8 @@ int generatePowerLawDegree(double alpha, int minDegree, int maxDegree,
   return std::pow(numerator, 1.0 / (1.0 - alpha));
 }
 
-RocksGraph* CreateRocksGraph(Options& options, int policy) {
-  return new RocksGraph(options, policy);
+RocksGraph* CreateRocksGraph(Options& options, int policy, int encoding = ENCODING_TYPE_NONE, bool reinit = true) {
+  return new RocksGraph(options, policy, encoding, reinit);
 }
 
 struct Timer {
@@ -105,9 +105,9 @@ class GraphBenchmarkTool {
     std::ifstream fin_;
   };
 
-  GraphBenchmarkTool(Options& options, bool is_directed, int policy)
-      : is_directed_(is_directed), policy_(policy) {
-    graph_ = CreateRocksGraph(options, policy_);
+  GraphBenchmarkTool(Options& options, bool is_directed, int policy, int encoding, bool reinit)
+      : is_directed_(is_directed), policy_(policy), encoding_(encoding), reinit_(reinit) {
+    graph_ = CreateRocksGraph(options, policy_, encoding_, reinit_);
   }
 
   void LoadGraph(const std::string& graph_file) {
@@ -267,15 +267,15 @@ class GraphBenchmarkTool {
         std::cout << "get error: " << s.ToString() << std::endl;
         exit(0);
       }
-      // std::cout << from << " ||\t";
-      // for (node_id_t i = 0; i < edges.num_edges_out; i++) {
-      //   std::cout << edges.nxts_out[i].nxt << "\t";
-      // }
-      // std::cout<<" ||\t";
-      // for (node_id_t i = 0; i < edges.num_edges_in; i++) {
-      //   std::cout << edges.nxts_in[i].nxt << "\t";
-      // }
-      // std::cout << std::endl;
+      std::cout << from << " ||\t";
+      for (node_id_t i = 0; i < edges.num_edges_out; i++) {
+        std::cout << edges.nxts_out[i].nxt << "\t";
+      }
+      std::cout<<" ||\t";
+      for (node_id_t i = 0; i < edges.num_edges_in; i++) {
+        std::cout << edges.nxts_in[i].nxt << "\t";
+      }
+      std::cout << std::endl;
     }
     return;
   }
@@ -388,6 +388,8 @@ class GraphBenchmarkTool {
   GraphBenchProfiler profiler_;
   bool is_directed_;
   int policy_;
+  int encoding_;
+  bool reinit_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

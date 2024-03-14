@@ -641,6 +641,34 @@ class bit_vector_builder : boost::noncopyable {
 
   void reserve(uint64_t size) { m_bits.reserve(detail::words_for(size)); }
 
+  inline void encode(std::string* value) {
+    size_t byte_to_fill = sizeof(m_size);
+    for (size_t i = byte_to_fill - 1; i >= 0; i--) {
+      value->push_back((m_size >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+    }
+    if (m_size > 0) {
+      byte_to_fill = sizeof(m_bits[0]);
+      for (size_t m = 0; m < m_bits.size(); m++) {
+        for (size_t i = byte_to_fill - 1; i >= 0; i--) {
+          value->push_back((m_bits[i] >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+        }
+      }
+    }
+  }
+
+  inline void decode(const std::string& value, size_t prefix_length) {
+    m_size = *reinterpret_cast<const u_int64_t*>(value.data() + prefix_length);
+    for (size_t m = 0; m < detail::words_for(m_size); m++) {
+      size_t offset = prefix_length + sizeof(u_int64_t) * (m + 1);
+      m_bits.push_back(*reinterpret_cast<const u_int64_t*>(
+          value.data() + prefix_length + offset));
+    }
+  }
+
+  inline size_t get_offset() {
+    return sizeof(u_int64_t) * (detail::words_for(m_size) + 1);
+  }
+
   inline void push_back(bool b) {
     uint64_t pos_in_word = m_size % 64;
     if (pos_in_word == 0) {
@@ -2165,7 +2193,7 @@ struct uniform_partitioned_sequence {
 
         uint64_t universe_bits = ceil_log2(universe);
         m_cur_base = it.take(universe_bits);
-        auto ub = 0;
+        uint64_t ub = 0;
         if (n > 1) {
           uint64_t universe_delta = read_delta(it);
           ub = universe_delta ? universe_delta : (universe - m_cur_base - 1);

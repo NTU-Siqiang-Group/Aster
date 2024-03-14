@@ -1,11 +1,13 @@
 #pragma once
 #include <iostream>
 
+#include "rocksdb/advanced_options.h"
 #include "rocksdb/db.h"
 #include "rocksdb/degree_approximate_counter.h"
+#include "rocksdb/env.h"
+#include "rocksdb/filter_policy.h"
 #include "rocksdb/graph_encoder.h"
 #include "rocksdb/merge_operator.h"
-#include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 
@@ -39,6 +41,7 @@ struct Edge {
   // Value val;
   node_id_t nxt;
 };
+// using Edge = int64_t;
 
 // 4+12x bytes
 struct Edges {
@@ -46,6 +49,13 @@ struct Edges {
   uint32_t num_edges_in = 0;
   Edge* nxts_out = NULL;
   Edge* nxts_in = NULL;
+};
+
+struct EdgesEncodedEF {
+  uint32_t num_edges_out = 0;
+  uint32_t num_edges_in = 0;
+  bit_vector bv_out;
+  bit_vector bv_in;
 };
 
 // 8 + 4 byte
@@ -82,13 +92,19 @@ void inline encode_edge(const Edge* edge, std::string* value) {
   //   value->push_back((edge->val.val >> ((byte_to_fill - i - 1) << 3)) &
   //   0xFF);
   // }
+  // int byte_to_fill = sizeof(edge->nxt);
+  // for (int i = byte_to_fill - 1; i >= 0; i--) {
+  //   value->push_back((edge->nxt >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+  // }
   int byte_to_fill = sizeof(edge->nxt);
   for (int i = byte_to_fill - 1; i >= 0; i--) {
     value->push_back((edge->nxt >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
   }
 }
 
-void inline encode_edges(const Edges* edges, std::string* value) {
+void inline encode_edges(const Edges* edges, std::string* value,
+                         node_id_t universe = 0,
+                         int encoding_type = ENCODING_TYPE_NONE) {
   // copy the number of edges
   // value->append(reinterpret_cast<const char*>(edges), sizeof(int) +
   // edges->num_edges_out * sizeof(Edge));
@@ -106,27 +122,73 @@ void inline encode_edges(const Edges* edges, std::string* value) {
   // decode_edges(&n, *value);
   // std::cout << "num_edges_out: " << n.num_edges_out << std::endl;
   // exit(0);
-  for (uint32_t i = 0; i < edges->num_edges_out; i++) {
-    encode_edge(&edges->nxts_out[i], value);
-  }
-  // std::cout << "num_edges_in: " << edges->num_edges_in << std::endl;
-  for (uint32_t i = 0; i < edges->num_edges_in; i++) {
-    encode_edge(&edges->nxts_in[i], value);
+  if (encoding_type == ENCODING_TYPE_NONE) {
+    for (uint32_t i = 0; i < edges->num_edges_out; i++) {
+      encode_edge(&edges->nxts_out[i], value);
+    }
+    // std::cout << "num_edges_in: " << edges->num_edges_in << std::endl;
+    for (uint32_t i = 0; i < edges->num_edges_in; i++) {
+      encode_edge(&edges->nxts_in[i], value);
+    }
+  } else if (encoding_type == ENCODING_TYPE_EFP) {
+    global_parameters params;
+    {
+      auto const ptr = reinterpret_cast<node_id_t*>(edges->nxts_out);
+      std::vector<node_id_t> seq_out(ptr, ptr + edges->num_edges_out);
+      bit_vector_builder bvb_out;
+      uniform_partitioned_sequence<indexed_sequence>::write(
+          bvb_out, seq_out.begin(), universe, seq_out.size(), params);
+      bvb_out.encode(value);
+    }
+    {
+      auto const ptr = reinterpret_cast<node_id_t*>(edges->nxts_in);
+      std::vector<node_id_t> seq_in(ptr, ptr + edges->num_edges_in);
+      bit_vector_builder bvb_in;
+      uniform_partitioned_sequence<indexed_sequence>::write(
+          bvb_in, seq_in.begin(), universe, seq_in.size(), params);
+      bvb_in.encode(value);
+    }
   }
 }
 
-void inline decode_edges(Edges* edges, const std::string& value) {
+void inline decode_edges(Edges* edges, const std::string& value, node_id_t universe = 0,
+                         int encoding_type = ENCODING_TYPE_NONE) {
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
       *reinterpret_cast<const uint32_t*>(value.data() + sizeof(uint32_t));
-  edges->nxts_out = new Edge[edges->num_edges_out];
-  memcpy(edges->nxts_out, value.data() + sizeof(uint32_t) * 2,
-         edges->num_edges_out * sizeof(Edge));
-  edges->nxts_in = new Edge[edges->num_edges_in];
-  memcpy(
-      edges->nxts_in,
-      value.data() + sizeof(uint32_t) * 2 + edges->num_edges_out * sizeof(Edge),
-      edges->num_edges_in * sizeof(Edge));
+  if (encoding_type == ENCODING_TYPE_NONE) {
+    edges->nxts_out = new Edge[edges->num_edges_out];
+    memcpy(edges->nxts_out, value.data() + sizeof(uint32_t) * 2,
+           edges->num_edges_out * sizeof(Edge));
+    edges->nxts_in = new Edge[edges->num_edges_in];
+    memcpy(edges->nxts_in,
+           value.data() + sizeof(uint32_t) * 2 +
+               edges->num_edges_out * sizeof(Edge),
+           edges->num_edges_in * sizeof(Edge));
+  } else if (encoding_type == ENCODING_TYPE_EFP) {
+    global_parameters params;
+    typename uniform_partitioned_sequence<indexed_sequence>::enumerator::value_type val;
+    
+    bit_vector_builder bvb_out;
+    bvb_out.decode(value, sizeof(uint32_t) * 2);
+    bit_vector bv_out(&bvb_out);
+    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_out(bv_out, 0, universe, edges->num_edges_out, params);
+    edges->nxts_out = new Edge[edges->num_edges_out];
+    for (uint64_t i = 0; i < edges->num_edges_out; ++i){
+      val = r_out.move(i); 
+      edges->nxts_out[i].nxt = val.second;
+    }
+
+    bit_vector_builder bvb_in;
+    bvb_in.decode(value, sizeof(uint32_t) * 2 + bvb_out.get_offset());
+    bit_vector bv_in(&bvb_in);
+    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_in(bv_in, 0, universe, edges->num_edges_in, params);
+    edges->nxts_in = new Edge[edges->num_edges_in];
+    for (uint64_t i = 0; i < edges->num_edges_in; ++i){
+      val = r_in.move(i); 
+      edges->nxts_in[i].nxt = val.second;
+    }
+  }
 }
 
 void inline free_edges(Edges* edges) {
@@ -139,7 +201,7 @@ class RocksGraph {
   int filter_type_ = FILTER_TYPE_NONE;
   int encoding_type_ = ENCODING_TYPE_NONE;
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
-  bool auto_reinitialize = false;
+  bool auto_reinitialize_ = false;
   double update_ratio = 0.5;
 
   class AdjacentListMergeOp : public AssociativeMergeOperator {
@@ -153,8 +215,12 @@ class RocksGraph {
                               Logger* logger) const override;
     virtual const char* Name() const override { return "AdjacentListMergeOp"; }
   };
-  RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE)
-      : edge_update_policy_(edge_update_policy),
+  RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE,
+             int encoding_type = ENCODING_TYPE_NONE,
+             bool auto_reinitialize = false)
+      : encoding_type_(encoding_type),
+        edge_update_policy_(edge_update_policy),
+        auto_reinitialize_(auto_reinitialize),
         n(0),
         m(0),
         cms_out(),
@@ -180,7 +246,7 @@ class RocksGraph {
     column_families.emplace_back("vertex_val", options);
     std::vector<ColumnFamilyHandle*> handles;
     std::string kDBPath = "/tmp/demo";
-    if(auto_reinitialize){
+    if (auto_reinitialize_) {
       DestroyDB(kDBPath, options);
     }
     Status s = DB::Open(options, kDBPath, column_families, &handles, &db_);

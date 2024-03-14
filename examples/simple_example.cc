@@ -23,6 +23,8 @@ int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   int edge_update_policy = EDGE_UPDATE_LAZY;
+  int encoding_type = ENCODING_TYPE_NONE;
+  bool reinit = true;
 
   rocksdb::Options options;
   if (FLAGS_enable_bloom_filter) {
@@ -32,10 +34,10 @@ int main(int argc, char** argv) {
   options.create_if_missing = true;
   options.statistics = rocksdb::CreateDBStatistics();
   options.write_buffer_size = 4 * 1024 * 1024;
-  rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy);
+  rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy, encoding_type, reinit);
 
-  int load_n = 10000;
-  int load_m = 10000;
+  int load_n = 100000;
+  int load_m = 1000000;
   auto load_start = std::chrono::steady_clock::now();
   tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraph(40000, 2.5);
@@ -48,7 +50,7 @@ int main(int argc, char** argv) {
             << std::endl;
 
   auto exec_start = std::chrono::steady_clock::now();
-  int get_n = 1000000;
+  int get_n = 1000;
   tool.RandomLookups(load_n, get_n);
   // tool.CompareDegreeFilterAccuracy(40000, 40000);
   // tool.Execute("/home/junfeng/Desktop/dataset/soc-pokec/workload2.txt");
