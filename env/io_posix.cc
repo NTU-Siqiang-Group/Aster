@@ -1294,6 +1294,7 @@ PosixWritableFile::~PosixWritableFile() {
   }
 }
 
+//Dingheng: posix append to file
 IOStatus PosixWritableFile::Append(const Slice& data, const IOOptions& /*opts*/,
                                    IODebugContext* /*dbg*/) {
   if (use_direct_io()) {

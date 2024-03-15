@@ -1,4 +1,5 @@
 #pragma once
+#include <fstream>
 #include <iostream>
 
 #include "rocksdb/advanced_options.h"
@@ -151,7 +152,8 @@ void inline encode_edges(const Edges* edges, std::string* value,
   }
 }
 
-void inline decode_edges(Edges* edges, const std::string& value, node_id_t universe = 0,
+void inline decode_edges(Edges* edges, const std::string& value,
+                         node_id_t universe = 0,
                          int encoding_type = ENCODING_TYPE_NONE) {
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
@@ -167,25 +169,28 @@ void inline decode_edges(Edges* edges, const std::string& value, node_id_t unive
            edges->num_edges_in * sizeof(Edge));
   } else if (encoding_type == ENCODING_TYPE_EFP) {
     global_parameters params;
-    typename uniform_partitioned_sequence<indexed_sequence>::enumerator::value_type val;
-    
+    typename uniform_partitioned_sequence<
+        indexed_sequence>::enumerator::value_type val;
+
     bit_vector_builder bvb_out;
     bvb_out.decode(value, sizeof(uint32_t) * 2);
     bit_vector bv_out(&bvb_out);
-    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_out(bv_out, 0, universe, edges->num_edges_out, params);
+    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_out(
+        bv_out, 0, universe, edges->num_edges_out, params);
     edges->nxts_out = new Edge[edges->num_edges_out];
-    for (uint64_t i = 0; i < edges->num_edges_out; ++i){
-      val = r_out.move(i); 
+    for (uint64_t i = 0; i < edges->num_edges_out; ++i) {
+      val = r_out.move(i);
       edges->nxts_out[i].nxt = val.second;
     }
 
     bit_vector_builder bvb_in;
     bvb_in.decode(value, sizeof(uint32_t) * 2 + bvb_out.get_offset());
     bit_vector bv_in(&bvb_in);
-    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_in(bv_in, 0, universe, edges->num_edges_in, params);
+    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_in(
+        bv_in, 0, universe, edges->num_edges_in, params);
     edges->nxts_in = new Edge[edges->num_edges_in];
-    for (uint64_t i = 0; i < edges->num_edges_in; ++i){
-      val = r_in.move(i); 
+    for (uint64_t i = 0; i < edges->num_edges_in; ++i) {
+      val = r_in.move(i);
       edges->nxts_in[i].nxt = val.second;
     }
   }
@@ -196,6 +201,33 @@ void inline free_edges(Edges* edges) {
   delete[] edges->nxts_in;
 }
 
+struct GraphMeta {
+  node_id_t n = 0;
+  node_id_t m = 0;
+};
+
+void inline writeMeta(const std::string& filePath, GraphMeta meta) {
+  std::ofstream outFile(filePath, std::ios::binary);
+  if (!outFile) {
+    return;
+    //throw std::runtime_error("Cannot open file for writing");
+  }
+  outFile.write(reinterpret_cast<const char*>(&meta.n), sizeof(meta.n));
+  outFile.write(reinterpret_cast<const char*>(&meta.m), sizeof(meta.m));
+  outFile.close();
+}
+
+void inline readMeta(const std::string& filePath, GraphMeta& meta) {
+  std::ifstream inFile(filePath, std::ios::binary);
+  if (!inFile) {
+    return;
+    //throw std::runtime_error("Cannot open file for reading");
+  }
+  inFile.read(reinterpret_cast<char*>(&meta.n), sizeof(meta.n));
+  inFile.read(reinterpret_cast<char*>(&meta.m), sizeof(meta.m));
+  inFile.close();
+}
+
 class RocksGraph {
  public:
   int filter_type_ = FILTER_TYPE_NONE;
@@ -203,6 +235,8 @@ class RocksGraph {
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
   bool auto_reinitialize_ = false;
   double update_ratio = 0.5;
+  std::string db_path = "/tmp/demo";
+  std::string meta_filename = "/GraphMeta.log";
 
   class AdjacentListMergeOp : public AssociativeMergeOperator {
    public:
@@ -245,11 +279,15 @@ class RocksGraph {
     column_families.emplace_back(kDefaultColumnFamilyName, options);
     column_families.emplace_back("vertex_val", options);
     std::vector<ColumnFamilyHandle*> handles;
-    std::string kDBPath = "/tmp/demo";
     if (auto_reinitialize_) {
-      DestroyDB(kDBPath, options);
+      DestroyDB(db_path, options);
+    } else {
+      GraphMeta meta;
+      readMeta(db_path + meta_filename, meta);
+      n = meta.n;
+      m = meta.m;
     }
-    Status s = DB::Open(options, kDBPath, column_families, &handles, &db_);
+    Status s = DB::Open(options, db_path, column_families, &handles, &db_);
     if (!s.ok()) {
       std::cout << s.ToString() << std::endl;
       exit(1);
@@ -259,6 +297,8 @@ class RocksGraph {
   }
 
   ~RocksGraph() {
+    GraphMeta meta{.m = m, .n = n};
+    writeMeta(db_path + meta_filename, meta);
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(val_cf_);
     db_->SyncWAL();
@@ -306,6 +346,8 @@ class RocksGraph {
   // Status SetVertexVal(node_id_t id, Value val);
 
   void printLSM() {
+    std::cout << "n = " << n << std::endl;
+    std::cout << "m = " << m << std::endl;
     ColumnFamilyMetaData cf_meta;
     db_->GetColumnFamilyMetaData(adj_cf_, &cf_meta);
     std::cout << "Print LSM" << std::endl;
