@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   int edge_update_policy = EDGE_UPDATE_LAZY;
-  int encoding_type = ENCODING_TYPE_NONE;
+  int encoding_type = ENCODING_TYPE_EFP;
   bool reinit = true;
 
   rocksdb::Options options;
@@ -36,8 +36,8 @@ int main(int argc, char** argv) {
   options.write_buffer_size = 4 * 1024 * 1024;
   rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy, encoding_type, reinit);
 
-  int load_n = 100000;
-  int load_m = 1000000;
+  int load_n = 10000;
+  int load_m = 100000;
   auto load_start = std::chrono::steady_clock::now();
   tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraph(40000, 2.5);

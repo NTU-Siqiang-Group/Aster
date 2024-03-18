@@ -643,30 +643,36 @@ class bit_vector_builder : boost::noncopyable {
 
   inline void encode(std::string* value) {
     size_t byte_to_fill = sizeof(m_size);
-    for (size_t i = byte_to_fill - 1; i >= 0; i--) {
+    for (long i = byte_to_fill - 1; i >= 0; i--) {
       value->push_back((m_size >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
     }
     if (m_size > 0) {
       byte_to_fill = sizeof(m_bits[0]);
       for (size_t m = 0; m < m_bits.size(); m++) {
-        for (size_t i = byte_to_fill - 1; i >= 0; i--) {
-          value->push_back((m_bits[i] >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+        // printf("m_bit[%ld] is: %lld\n", m, m_bits[m]);
+        for (long i = byte_to_fill - 1; i >= 0; i--) {
+          value->push_back((m_bits[m] >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
         }
       }
     }
   }
 
   inline void decode(const std::string& value, size_t prefix_length) {
-    m_size = *reinterpret_cast<const u_int64_t*>(value.data() + prefix_length);
+    m_size = *reinterpret_cast<const uint64_t*>(value.data() + prefix_length);
+    // printf("m_size is: %lld\n", m_size);
     for (size_t m = 0; m < detail::words_for(m_size); m++) {
-      size_t offset = prefix_length + sizeof(u_int64_t) * (m + 1);
-      m_bits.push_back(*reinterpret_cast<const u_int64_t*>(
-          value.data() + prefix_length + offset));
+      size_t offset = prefix_length + sizeof(uint64_t) * (m + 1);
+      m_bits.push_back(*reinterpret_cast<const uint64_t*>(
+          value.data() + offset));
+      // printf("m_bit[%ld] is: %lld\n", m, m_bits[m]);
     }
   }
 
   inline size_t get_offset() {
-    return sizeof(u_int64_t) * (detail::words_for(m_size) + 1);
+    if (m_size > 0)
+      return sizeof(uint64_t) * (detail::words_for(m_size) + 1);
+    else
+      return 0;
   }
 
   inline void push_back(bool b) {
@@ -1967,7 +1973,6 @@ struct indexed_sequence {
 
       bvb.append_bits(best_type, type_bits);
     }
-
     switch (best_type) {
       case elias_fano:
         compact_elias_fano::write(bvb, begin, universe, n, params);
@@ -2124,7 +2129,6 @@ struct uniform_partitioned_sequence {
           write_delta(bvb, cur_partition.back());
         }
       }
-
       base_sequence_type::write(bvb, cur_partition.begin(),
                                 cur_partition.back() + 1, cur_partition.size(),
                                 params);
@@ -2158,7 +2162,6 @@ struct uniform_partitioned_sequence {
         upper_bounds.push_back(upper_bound);
         cur_base = upper_bound + 1;
       }
-
       bit_vector_builder bv_upper_bounds;
       compact_elias_fano::write(bv_upper_bounds, upper_bounds.begin(), universe,
                                 partitions + 1, params);

@@ -1,6 +1,7 @@
 #pragma once
 #include <fstream>
 #include <iostream>
+#include <limits>
 
 #include "rocksdb/advanced_options.h"
 #include "rocksdb/db.h"
@@ -103,9 +104,10 @@ void inline encode_edge(const Edge* edge, std::string* value) {
   }
 }
 
-void inline encode_edges(const Edges* edges, std::string* value,
-                         node_id_t universe = 0,
-                         int encoding_type = ENCODING_TYPE_NONE) {
+void inline encode_edges(
+    const Edges* edges, std::string* value,
+    int encoding_type = ENCODING_TYPE_NONE,
+    node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   // copy the number of edges
   // value->append(reinterpret_cast<const char*>(edges), sizeof(int) +
   // edges->num_edges_out * sizeof(Edge));
@@ -137,24 +139,29 @@ void inline encode_edges(const Edges* edges, std::string* value,
       auto const ptr = reinterpret_cast<node_id_t*>(edges->nxts_out);
       std::vector<node_id_t> seq_out(ptr, ptr + edges->num_edges_out);
       bit_vector_builder bvb_out;
-      uniform_partitioned_sequence<indexed_sequence>::write(
-          bvb_out, seq_out.begin(), universe, seq_out.size(), params);
-      bvb_out.encode(value);
+      if (edges->num_edges_out > 0) {
+        uniform_partitioned_sequence<indexed_sequence>::write(
+            bvb_out, seq_out.begin(), universe, seq_out.size(), params);
+        bvb_out.encode(value);
+      }
     }
     {
       auto const ptr = reinterpret_cast<node_id_t*>(edges->nxts_in);
       std::vector<node_id_t> seq_in(ptr, ptr + edges->num_edges_in);
       bit_vector_builder bvb_in;
-      uniform_partitioned_sequence<indexed_sequence>::write(
-          bvb_in, seq_in.begin(), universe, seq_in.size(), params);
-      bvb_in.encode(value);
+      if (edges->num_edges_in > 0) {
+        uniform_partitioned_sequence<indexed_sequence>::write(
+            bvb_in, seq_in.begin(), universe, seq_in.size(), params);
+        bvb_in.encode(value);
+      }
     }
   }
 }
 
-void inline decode_edges(Edges* edges, const std::string& value,
-                         node_id_t universe = 0,
-                         int encoding_type = ENCODING_TYPE_NONE) {
+void inline decode_edges(
+    Edges* edges, const std::string& value,
+    int encoding_type = ENCODING_TYPE_NONE,
+    node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
       *reinterpret_cast<const uint32_t*>(value.data() + sizeof(uint32_t));
@@ -171,27 +178,33 @@ void inline decode_edges(Edges* edges, const std::string& value,
     global_parameters params;
     typename uniform_partitioned_sequence<
         indexed_sequence>::enumerator::value_type val;
-
-    bit_vector_builder bvb_out;
-    bvb_out.decode(value, sizeof(uint32_t) * 2);
-    bit_vector bv_out(&bvb_out);
-    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_out(
-        bv_out, 0, universe, edges->num_edges_out, params);
-    edges->nxts_out = new Edge[edges->num_edges_out];
-    for (uint64_t i = 0; i < edges->num_edges_out; ++i) {
-      val = r_out.move(i);
-      edges->nxts_out[i].nxt = val.second;
+    size_t out_offset = 0;
+    
+    if (edges->num_edges_out > 0) {
+      bit_vector_builder bvb_out;
+      bvb_out.decode(value, sizeof(uint32_t) * 2);
+      bit_vector bv_out(&bvb_out);
+      typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_out(
+          bv_out, 0, universe, edges->num_edges_out, params);
+      edges->nxts_out = new Edge[edges->num_edges_out];
+      for (uint64_t i = 0; i < edges->num_edges_out; ++i) {
+        val = r_out.move(i);
+        edges->nxts_out[i].nxt = val.second;
+      }
+      out_offset = bvb_out.get_offset();
     }
 
-    bit_vector_builder bvb_in;
-    bvb_in.decode(value, sizeof(uint32_t) * 2 + bvb_out.get_offset());
-    bit_vector bv_in(&bvb_in);
-    typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_in(
-        bv_in, 0, universe, edges->num_edges_in, params);
-    edges->nxts_in = new Edge[edges->num_edges_in];
-    for (uint64_t i = 0; i < edges->num_edges_in; ++i) {
-      val = r_in.move(i);
-      edges->nxts_in[i].nxt = val.second;
+    if (edges->num_edges_in > 0) {
+      bit_vector_builder bvb_in;
+      bvb_in.decode(value, sizeof(uint32_t) * 2 + out_offset);
+      bit_vector bv_in(&bvb_in);
+      typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_in(
+          bv_in, 0, universe, edges->num_edges_in, params);
+      edges->nxts_in = new Edge[edges->num_edges_in];
+      for (uint64_t i = 0; i < edges->num_edges_in; ++i) {
+        val = r_in.move(i);
+        edges->nxts_in[i].nxt = val.second;
+      }
     }
   }
 }
@@ -210,7 +223,7 @@ void inline writeMeta(const std::string& filePath, GraphMeta meta) {
   std::ofstream outFile(filePath, std::ios::binary);
   if (!outFile) {
     return;
-    //throw std::runtime_error("Cannot open file for writing");
+    // throw std::runtime_error("Cannot open file for writing");
   }
   outFile.write(reinterpret_cast<const char*>(&meta.n), sizeof(meta.n));
   outFile.write(reinterpret_cast<const char*>(&meta.m), sizeof(meta.m));
@@ -221,7 +234,7 @@ void inline readMeta(const std::string& filePath, GraphMeta& meta) {
   std::ifstream inFile(filePath, std::ios::binary);
   if (!inFile) {
     return;
-    //throw std::runtime_error("Cannot open file for reading");
+    // throw std::runtime_error("Cannot open file for reading");
   }
   inFile.read(reinterpret_cast<char*>(&meta.n), sizeof(meta.n));
   inFile.read(reinterpret_cast<char*>(&meta.m), sizeof(meta.m));
@@ -240,6 +253,8 @@ class RocksGraph {
 
   class AdjacentListMergeOp : public AssociativeMergeOperator {
    public:
+    int encoding_type_;
+    AdjacentListMergeOp(int encoding_type) : encoding_type_(encoding_type) {}
     virtual ~AdjacentListMergeOp() override{};
     virtual bool Merge(const Slice& key, const Slice* existing_value,
                        const Slice& value, std::string* new_value,
@@ -262,7 +277,7 @@ class RocksGraph {
         cms_in(),
         mor_in() {
     if (edge_update_policy != EDGE_UPDATE_EAGER) {
-      options.merge_operator.reset(new AdjacentListMergeOp);
+      options.merge_operator.reset(new AdjacentListMergeOp(encoding_type_));
     }
     auto table_options =
         options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();

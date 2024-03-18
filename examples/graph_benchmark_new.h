@@ -308,16 +308,16 @@ class GraphBenchmarkTool {
         exit(0);
       }
       int real_degree = edges.num_edges_out;
-      cms_absolute_error += abs(
-          real_degree - graph_->GetOutDegreeApproximate(from, FILTER_TYPE_CMS));
-      cms_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-                                                  from, FILTER_TYPE_CMS)) /
-                            (double)real_degree;
-      mor_absolute_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-                                                  from, FILTER_TYPE_MORRIS));
-      mor_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-                                                  from, FILTER_TYPE_MORRIS)) /
-                            (double)real_degree;
+      // cms_absolute_error += abs(
+      //     real_degree - graph_->GetOutDegreeApproximate(from, FILTER_TYPE_CMS));
+      // cms_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
+      //                                             from, FILTER_TYPE_CMS)) /
+      //                       (double)real_degree;
+      // mor_absolute_error += abs(real_degree - graph_->GetOutDegreeApproximate(
+      //                                             from, FILTER_TYPE_MORRIS));
+      // mor_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
+      //                                             from, FILTER_TYPE_MORRIS)) /
+      //                       (double)real_degree;
       // std::cout << from << " ||\t";
       // for (node_id_t i = 0; i < edges.num_edges_out; i++) {
       //   std::cout << edges.nxts_out[i].nxt << "\t";

@@ -105,8 +105,8 @@ bool RocksGraph::AdjacentListMergeOp::Merge(const Slice& key,
   }
   Edges new_edges, existing_edges, merged_edges;
 
-  decode_edges(&new_edges, value.ToString());
-  decode_edges(&existing_edges, existing_value->ToString());
+  decode_edges(&new_edges, value.ToString(), encoding_type_);
+  decode_edges(&existing_edges, existing_value->ToString(), encoding_type_);
   merged_edges.num_edges_out =
       existing_edges.num_edges_out + new_edges.num_edges_out;
   merged_edges.num_edges_in =
@@ -115,7 +115,7 @@ bool RocksGraph::AdjacentListMergeOp::Merge(const Slice& key,
   MergeSortInEdges(existing_edges, new_edges, merged_edges);
   free_edges(&existing_edges);
   free_edges(&new_edges);
-  encode_edges(&merged_edges, new_value);
+  encode_edges(&merged_edges, new_value, encoding_type_);
   free_edges(&merged_edges);
   return true;
   logger->Flush();
@@ -134,8 +134,8 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
     }
   }
   Edges new_edges, existing_edges, merged_edges;
-  decode_edges(&new_edges, value.ToString());
-  decode_edges(&existing_edges, existing_value.ToString());
+  decode_edges(&new_edges, value.ToString(), encoding_type_);
+  decode_edges(&existing_edges, existing_value.ToString(), encoding_type_);
 
   merged_edges.num_edges_out =
       existing_edges.num_edges_out + new_edges.num_edges_out;
@@ -145,7 +145,7 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
   MergeSortInEdges(existing_edges, new_edges, merged_edges, true);
   free_edges(&existing_edges);
   free_edges(&new_edges);
-  encode_edges(&merged_edges, new_value);
+  encode_edges(&merged_edges, new_value, encoding_type_);
   free_edges(&merged_edges);
   return true;
   logger->Flush();
@@ -186,7 +186,7 @@ node_id_t RocksGraph::random_walk(node_id_t start, float decay_factor) {
     if (!s.ok()) {
       return 0;
     }
-    decode_edges(&edges, value);
+    decode_edges(&edges, value, encoding_type_);
     if (edges.num_edges_out == 0) {
       return cur;
     }
@@ -211,7 +211,7 @@ Status RocksGraph::AddVertex(node_id_t id) {
   encode_node(v, &key);
   Edges edges{.num_edges_out = 0};
   edges.nxts_out = NULL;
-  encode_edges(&edges, &value);
+  encode_edges(&edges, &value, encoding_type_);
   free_edges(&edges);
   return db_->Put(WriteOptions(), adj_cf_, key, value);
 }
@@ -243,7 +243,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
     edges.nxts_out[0] = Edge{.nxt = to};
-    encode_edges(&edges, &value_out);
+    encode_edges(&edges, &value_out, encoding_type_);
     free_edges(&edges);
     s = db_->Merge(WriteOptions(), adj_cf_, key_out, value_out);
     if (!s.ok() && !s.IsNotFound()) {
@@ -267,7 +267,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
                          existing_edges.num_edges_out, to);
     if (is_merge) new_edges.num_edges_out--;
     std::string new_value;
-    encode_edges(&new_edges, &new_value);
+    encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
     free_edges(&new_edges);
     s = db_->Put(WriteOptions(), adj_cf_, key_out, new_value);
@@ -287,7 +287,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
     edges.nxts_in = new Edge[1];
     edges.nxts_in[0] = Edge{.nxt = from};
-    encode_edges(&edges, &value_in);
+    encode_edges(&edges, &value_in, encoding_type_);
     free_edges(&edges);
     s = db_->Merge(WriteOptions(), adj_cf_, key_in, value_in);
     if (!s.ok() && !s.IsNotFound()) {
@@ -309,7 +309,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
                                      existing_edges.num_edges_in, from);
     if (is_merge) new_edges.num_edges_in--;
     std::string new_value;
-    encode_edges(&new_edges, &new_value);
+    encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
     free_edges(&new_edges);
     s = db_->Put(WriteOptions(), adj_cf_, key_in, new_value);
@@ -334,7 +334,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
     edges.nxts_out[0] = Edge{.nxt = -to};
-    encode_edges(&edges, &value_out);
+    encode_edges(&edges, &value_out, encoding_type_);
     free_edges(&edges);
     return db_->Merge(WriteOptions(), adj_cf_, key_out, value_out);
   } else if (edge_update_policy_ == EDGE_UPDATE_EAGER) {
@@ -360,7 +360,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     }
     new_edges.num_edges_out = edge_count;
     std::string new_value;
-    encode_edges(&new_edges, &new_value);
+    encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
     free_edges(&new_edges);
     return db_->Put(WriteOptions(), adj_cf_, key_out, new_value);
@@ -377,7 +377,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
     edges.nxts_in = new Edge[1];
     edges.nxts_in[0] = Edge{.nxt = -from};
-    encode_edges(&edges, &value_in);
+    encode_edges(&edges, &value_in, encoding_type_);
     free_edges(&edges);
     s = db_->Merge(WriteOptions(), adj_cf_, key_in, value_in);
     if (!s.ok() && !s.IsNotFound()) {
@@ -407,7 +407,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     }
     new_edges.num_edges_in = edge_count;
     std::string new_value;
-    encode_edges(&new_edges, &new_value);
+    encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
     free_edges(&new_edges);
     s = db_->Put(WriteOptions(), adj_cf_, key_in, new_value);
@@ -427,7 +427,7 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
   if (!s.ok()) {
     return s;
   }
-  decode_edges(edges, value);
+  decode_edges(edges, value, encoding_type_);
   return Status::OK();
 }
 
@@ -438,7 +438,7 @@ node_id_t RocksGraph::GetOutDegree(node_id_t src) {
   std::string value;
   db_->Get(ReadOptions(), adj_cf_, key, &value);
   Edges edges;
-  decode_edges(&edges, value);
+  decode_edges(&edges, value, encoding_type_);
   return edges.num_edges_out;
 }
 
@@ -449,7 +449,7 @@ node_id_t RocksGraph::GetInDegree(node_id_t src) {
   std::string value;
   db_->Get(ReadOptions(), adj_cf_, key, &value);
   Edges edges;
-  decode_edges(&edges, value);
+  decode_edges(&edges, value, encoding_type_);
   return edges.num_edges_in;
 }
 
