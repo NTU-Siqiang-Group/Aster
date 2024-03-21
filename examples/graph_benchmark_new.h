@@ -27,7 +27,9 @@ int generatePowerLawDegree(double alpha, int minDegree, int maxDegree,
   return std::pow(numerator, 1.0 / (1.0 - alpha));
 }
 
-RocksGraph* CreateRocksGraph(Options& options, int policy, int encoding = ENCODING_TYPE_NONE, bool reinit = true) {
+RocksGraph* CreateRocksGraph(Options& options, int policy,
+                             int encoding = ENCODING_TYPE_NONE,
+                             bool reinit = true) {
   return new RocksGraph(options, policy, encoding, reinit);
 }
 
@@ -105,8 +107,12 @@ class GraphBenchmarkTool {
     std::ifstream fin_;
   };
 
-  GraphBenchmarkTool(Options& options, bool is_directed, int policy, int encoding, bool reinit)
-      : is_directed_(is_directed), policy_(policy), encoding_(encoding), reinit_(reinit) {
+  GraphBenchmarkTool(Options& options, bool is_directed, int policy,
+                     int encoding, bool reinit)
+      : is_directed_(is_directed),
+        policy_(policy),
+        encoding_(encoding),
+        reinit_(reinit) {
     graph_ = CreateRocksGraph(options, policy_, encoding_, reinit_);
   }
 
@@ -253,10 +259,10 @@ class GraphBenchmarkTool {
   void RandomLookups(node_id_t n, node_id_t m) {
     Status s;
     for (int i = 0; i < m; i++) {
-      //if (i % (m / 100) == 0) {
-        // printf("\r");
-        //printf("%.1f\t", (i * 100) / (double)m);
-        // fflush(stdout);
+      // if (i % (m / 100) == 0) {
+      //  printf("\r");
+      // printf("%.1f\t", (i * 100) / (double)m);
+      //  fflush(stdout);
       //}
       node_id_t from;
       from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
@@ -271,12 +277,100 @@ class GraphBenchmarkTool {
       for (node_id_t i = 0; i < edges.num_edges_out; i++) {
         std::cout << edges.nxts_out[i].nxt << "\t";
       }
-      std::cout<<" ||\t";
+      std::cout << " ||\t";
       for (node_id_t i = 0; i < edges.num_edges_in; i++) {
         std::cout << edges.nxts_in[i].nxt << "\t";
       }
+      std::cout <<" ||\t" << graph_->GetOutDegreeApproximate(from);
+      std::cout <<" ||\t" << graph_->GetInDegreeApproximate(from);
       std::cout << std::endl;
     }
+    return;
+  }
+
+  void DeleteTest(node_id_t n = 50000, node_id_t d = 10) {
+    InitNodes(n);
+    Status s;
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        if (is_directed_) {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        } else {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          s = graph_->AddEdge(to, from);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        }
+      }
+    }
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i + d;
+        to = to % n;
+        if (is_directed_) {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        } else {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          s = graph_->AddEdge(to, from);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        }
+        from = j;
+        to = j - i + d / 2;
+        to = to % n;
+        if (is_directed_) {
+          s = graph_->DeleteEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        } else {
+          s = graph_->DeleteEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          s = graph_->DeleteEdge(to, from);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        }
+      }
+    }
+    printf("\n");
     return;
   }
 
@@ -308,20 +402,20 @@ class GraphBenchmarkTool {
         exit(0);
       }
       int real_degree = edges.num_edges_out;
-      // cms_absolute_error += abs(
-      //     real_degree - graph_->GetOutDegreeApproximate(from, FILTER_TYPE_CMS));
-      // cms_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-      //                                             from, FILTER_TYPE_CMS)) /
-      //                       (double)real_degree;
-      // mor_absolute_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-      //                                             from, FILTER_TYPE_MORRIS));
-      // mor_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-      //                                             from, FILTER_TYPE_MORRIS)) /
-      //                       (double)real_degree;
-      // std::cout << from << " ||\t";
-      // for (node_id_t i = 0; i < edges.num_edges_out; i++) {
-      //   std::cout << edges.nxts_out[i].nxt << "\t";
-      // }
+      cms_absolute_error += abs(
+          real_degree - graph_->GetOutDegreeApproximate(from, FILTER_TYPE_CMS));
+      cms_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
+                                                  from, FILTER_TYPE_CMS)) /
+                            (double)real_degree;
+      mor_absolute_error += abs(real_degree - graph_->GetOutDegreeApproximate(
+                                                  from, FILTER_TYPE_MORRIS));
+      mor_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
+                                                  from, FILTER_TYPE_MORRIS)) /
+                            (double)real_degree;
+      std::cout << from << " ||\t";
+      for (node_id_t i = 0; i < edges.num_edges_out; i++) {
+        std::cout << edges.nxts_out[i].nxt << "\t";
+      }
     }
     cms_relative_error = cms_relative_error / m;
     mor_relative_error = mor_relative_error / m;

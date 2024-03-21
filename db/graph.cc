@@ -13,6 +13,14 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
   auto merge_edges_list = new Edge[merged_edges.num_edges_out];
   while (pivot_ex < existing_edges.num_edges_out ||
          pivot_new < new_edges.num_edges_out) {
+    bool is_deleted = false;
+    for (auto delete_edge : delete_edges) {
+      if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
+        pivot_ex++;
+        is_deleted = true;
+      }
+    }
+    if (is_deleted) continue;
     if (pivot_ex >= existing_edges.num_edges_out) {
       merge_edges_list[edge_count++].nxt = new_edges.nxts_out[pivot_new++].nxt;
       continue;
@@ -26,12 +34,12 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
       delete_edges.push_back(-new_edges.nxts_out[pivot_new++].nxt);
       continue;
     }
-    for (auto delete_edge : delete_edges) {
-      if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
-        pivot_ex++;
-        continue;
-      }
-    }
+    // for (auto delete_edge : delete_edges) {
+    //   if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
+    //     pivot_ex++;
+    //     continue;
+    //   }
+    // }
     if (existing_edges.nxts_out[pivot_ex].nxt ==
         new_edges.nxts_out[pivot_new].nxt) {
       pivot_ex++;
@@ -58,6 +66,14 @@ void inline MergeSortInEdges(const Edges& existing_edges,
   auto merge_edges_list = new Edge[merged_edges.num_edges_in];
   while (pivot_ex < existing_edges.num_edges_in ||
          pivot_new < new_edges.num_edges_in) {
+    bool is_deleted = false;
+    for (auto delete_edge : delete_edges) {
+      if (delete_edge == existing_edges.nxts_in[pivot_ex].nxt) {
+        pivot_ex++;
+        is_deleted = true;
+      }
+    }
+    if (is_deleted) continue;
     if (pivot_ex >= existing_edges.num_edges_in) {
       merge_edges_list[edge_count++].nxt = new_edges.nxts_in[pivot_new++].nxt;
       continue;
@@ -70,12 +86,6 @@ void inline MergeSortInEdges(const Edges& existing_edges,
     if (new_edges.nxts_in[pivot_new].nxt < 0 && !is_partial) {
       delete_edges.push_back(-new_edges.nxts_in[pivot_new++].nxt);
       continue;
-    }
-    for (auto delete_edge : delete_edges) {
-      if (delete_edge == existing_edges.nxts_in[pivot_ex].nxt) {
-        pivot_ex++;
-        continue;
-      }
     }
     if (existing_edges.nxts_in[pivot_ex].nxt ==
         new_edges.nxts_in[pivot_new].nxt) {
@@ -230,7 +240,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   m++;
 
   // we insert vertex 'to' into the out edge list of vertex 'from' at first
-  //VertexKey v_out{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
+  // VertexKey v_out{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
   VertexKey v_out{.id = from};
   std::string key_out, value_out;
   encode_node(v_out, &key_out);
@@ -326,24 +336,28 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   VertexKey v{.id = from};
   std::string key_out, value_out;
   encode_node(v, &key_out);
-    int out_policy = edge_update_policy_;
+  int out_policy = edge_update_policy_;
   if (out_policy == EDGE_UPDATE_ADAPTIVE) {
     out_policy = AdaptPolicy(from, true);
   }
-  if (edge_update_policy_ == EDGE_UPDATE_LAZY) {
+  if (edge_update_policy_ == EDGE_UPDATE_LAZY && encoding_type_ != ENCODING_TYPE_EFP) {
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
     edges.nxts_out[0] = Edge{.nxt = -to};
     encode_edges(&edges, &value_out, encoding_type_);
     free_edges(&edges);
-    return db_->Merge(WriteOptions(), adj_cf_, key_out, value_out);
-  } else if (edge_update_policy_ == EDGE_UPDATE_EAGER) {
+    s = db_->Merge(WriteOptions(), adj_cf_, key_out, value_out);
+    if (!s.ok() && !s.IsNotFound()) {
+      return s;
+    }
+  } else if (edge_update_policy_ == EDGE_UPDATE_EAGER || encoding_type_ == ENCODING_TYPE_EFP) {
     Edges existing_edges{.num_edges_out = 0};
     s = GetAllEdges(from, &existing_edges);
     if (!s.ok() && !s.IsNotFound()) {
       return s;
     }
-    Edges new_edges{.num_edges_out = existing_edges.num_edges_out};
+    Edges new_edges{.num_edges_out = existing_edges.num_edges_out,
+                    .num_edges_in = existing_edges.num_edges_in};
     new_edges.nxts_in = new Edge[existing_edges.num_edges_in];
     memcpy(new_edges.nxts_in, existing_edges.nxts_in,
            existing_edges.num_edges_in * sizeof(Edge));
@@ -363,7 +377,10 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
     free_edges(&new_edges);
-    return db_->Put(WriteOptions(), adj_cf_, key_out, new_value);
+    s = db_->Put(WriteOptions(), adj_cf_, key_out, new_value);
+    if (!s.ok() && !s.IsNotFound()) {
+      return s;
+    }
   }
 
   VertexKey v_in{.id = to};
@@ -373,7 +390,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   if (in_policy == EDGE_UPDATE_ADAPTIVE) {
     in_policy = AdaptPolicy(from, false);
   }
-  if (in_policy == EDGE_UPDATE_LAZY) {
+  if (in_policy == EDGE_UPDATE_LAZY && encoding_type_ != ENCODING_TYPE_EFP) {
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
     edges.nxts_in = new Edge[1];
     edges.nxts_in[0] = Edge{.nxt = -from};
@@ -383,18 +400,19 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     if (!s.ok() && !s.IsNotFound()) {
       return s;
     }
-  } else if (in_policy == EDGE_UPDATE_EAGER) {
-    Edges existing_edges{.num_edges_out = 0, .num_edges_in = 0};
+  } else if (in_policy == EDGE_UPDATE_EAGER || encoding_type_ == ENCODING_TYPE_EFP) {
+    Edges existing_edges{.num_edges_in = 0};
     s = GetAllEdges(to, &existing_edges);
     if (!s.ok() && !s.IsNotFound()) {
       return s;
     }
     Edges new_edges{.num_edges_out = existing_edges.num_edges_out,
-                    .num_edges_in = existing_edges.num_edges_in + 1};
+                    .num_edges_in = existing_edges.num_edges_in};
     // copy existing out edges
     new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
     memcpy(new_edges.nxts_out, existing_edges.nxts_out,
            existing_edges.num_edges_out * sizeof(Edge));
+    new_edges.nxts_in = new Edge[new_edges.num_edges_in];
     node_id_t pivot_ex = 0;
     uint32_t edge_count = 0;
     while (pivot_ex < existing_edges.num_edges_in) {

@@ -243,7 +243,7 @@ void inline readMeta(const std::string& filePath, GraphMeta& meta) {
 
 class RocksGraph {
  public:
-  int filter_type_ = FILTER_TYPE_NONE;
+  int filter_type_ = FILTER_TYPE_MORRIS;
   int encoding_type_ = ENCODING_TYPE_NONE;
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
   bool auto_reinitialize_ = false;
@@ -273,9 +273,11 @@ class RocksGraph {
         n(0),
         m(0),
         cms_out(),
-        mor_out(),
         cms_in(),
-        mor_in() {
+        mor_out(),
+        mor_out_delete(),
+        mor_in(),
+        mor_in_delete(){
     if (edge_update_policy != EDGE_UPDATE_EAGER) {
       options.merge_operator.reset(new AdjacentListMergeOp(encoding_type_));
     }
@@ -403,9 +405,11 @@ class RocksGraph {
   // bool is_lazy_;
   ColumnFamilyHandle *val_cf_, *adj_cf_;
   CountMinSketch cms_out;
-  MorrisCounter mor_out;
   CountMinSketch cms_in;
+  MorrisCounter mor_out;
+  MorrisCounter mor_out_delete;
   MorrisCounter mor_in;
+  MorrisCounter mor_in_delete;
   double cms_delta = 0.1;
   double cms_epsilon = 1.0 / 12000;
 };

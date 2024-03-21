@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   int edge_update_policy = EDGE_UPDATE_LAZY;
-  int encoding_type = ENCODING_TYPE_EFP;
+  int encoding_type = ENCODING_TYPE_NONE;
   bool reinit = true;
 
   rocksdb::Options options;
@@ -39,8 +39,9 @@ int main(int argc, char** argv) {
   int load_n = 10000;
   int load_m = 100000;
   auto load_start = std::chrono::steady_clock::now();
-  tool.LoadRandomGraph(load_n, load_m);
+  //tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraph(40000, 2.5);
+  tool.DeleteTest();
       
   auto load_end = std::chrono::steady_clock::now();
   std::cout << "put latency: "
