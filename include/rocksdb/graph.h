@@ -88,6 +88,10 @@ void inline decode_node(VertexKey* v, const std::string& key) {
   *v = *reinterpret_cast<const VertexKey*>(key.data());
 }
 
+node_id_t inline decode_node(const std::string& key) {
+  return *reinterpret_cast<const node_id_t*>(key.data());
+}
+
 void inline encode_edge(const Edge* edge, std::string* value) {
   // int byte_to_fill = sizeof(Value);
   // for (int i = byte_to_fill - 1; i >= 0; i--) {
@@ -179,7 +183,7 @@ void inline decode_edges(
     typename uniform_partitioned_sequence<
         indexed_sequence>::enumerator::value_type val;
     size_t out_offset = 0;
-    
+
     if (edges->num_edges_out > 0) {
       bit_vector_builder bvb_out;
       bvb_out.decode(value, sizeof(uint32_t) * 2);
@@ -254,7 +258,13 @@ class RocksGraph {
   class AdjacentListMergeOp : public AssociativeMergeOperator {
    public:
     int encoding_type_;
-    AdjacentListMergeOp(int encoding_type) : encoding_type_(encoding_type) {}
+    MorrisCounter* morris_out_delete_;
+    MorrisCounter* morris_in_delete_;
+    AdjacentListMergeOp(int encoding_type, MorrisCounter* morris_out_delete,
+                        MorrisCounter* morris_in_delete)
+        : encoding_type_(encoding_type),
+          morris_out_delete_(morris_out_delete),
+          morris_in_delete_(morris_in_delete) {}
     virtual ~AdjacentListMergeOp() override{};
     virtual bool Merge(const Slice& key, const Slice* existing_value,
                        const Slice& value, std::string* new_value,
@@ -277,9 +287,10 @@ class RocksGraph {
         mor_out(),
         mor_out_delete(),
         mor_in(),
-        mor_in_delete(){
+        mor_in_delete() {
     if (edge_update_policy != EDGE_UPDATE_EAGER) {
-      options.merge_operator.reset(new AdjacentListMergeOp(encoding_type_));
+      options.merge_operator.reset(new AdjacentListMergeOp(
+          encoding_type_, &mor_out_delete, &mor_in_delete));
     }
     auto table_options =
         options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
