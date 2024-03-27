@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+using namespace std::chrono;
 
 #include "rocksdb/db.h"
 #include "rocksdb/filter_policy.h"
@@ -147,12 +149,16 @@ class GraphBenchmarkTool {
 
   void InitNodes(node_id_t n) {
     Status s;
-    for (int i = 0; i < n; i++) {
-      s = graph_->AddVertex(i);
-      if (!s.ok()) {
-        std::cout << "add node error: " << s.ToString() << std::endl;
-        exit(0);
+    if (policy_ != EDGE_UPDATE_EAGER) {
+      for (int i = 0; i < n; i++) {
+        s = graph_->AddVertex(i);
+        if (!s.ok()) {
+          std::cout << "add node error: " << s.ToString() << std::endl;
+          exit(0);
+        }
       }
+    } else {
+      graph_->n = n;
     }
   }
 
@@ -198,14 +204,12 @@ class GraphBenchmarkTool {
     std::random_device rd;
     std::mt19937 gen(rd());
     int m_edge_count = 0;
+    InitNodes(n);
     Status s;
     for (int i = 0; i < n; i++) {
-      if (i % (n / 100) == 0) {
-        printf("\r");
-        printf("%f", (i * 100) / (double)n);
-        fflush(stdout);
+      if (i % (n / 20) == 0) {
+        std::cout << (i * 100) / (double)n << "\t%" << std::endl;
       }
-      printf("\r");
       int degree = generatePowerLawDegree(alpha, min_degree, max_degree, gen);
       // printf("degree:%d\n", degree);
       m_edge_count += degree;
@@ -214,19 +218,41 @@ class GraphBenchmarkTool {
         from = i;
         to = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
         to = to % n;
-        if (is_directed_) {
+        s = graph_->AddEdge(from, to);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      }
+    }
+    printf("M = %d when alpha = %f\n", m_edge_count, alpha);
+    return;
+  }
+
+  void LoadPowerLawGraphNew(node_id_t n, double alpha, int min_degree = 4,
+                            int max_degree = 1024) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    int m_edge_count = 0;
+    InitNodes(n);
+    Status s;
+    std::vector<int> degree_array(n);
+    node_id_t from, to;
+    for (int i = 0; i < n; i++) {
+      degree_array[i] =
+          generatePowerLawDegree(alpha, min_degree, max_degree, gen);
+    }
+    for (int t = max_degree; t > 0; t--) {
+      if (t % (max_degree / 20) == 0) {
+        std::cout << (t * 100) / (double)max_degree << "\t%" << std::endl;
+      }
+      for (int i = 0; i < n; i++) {
+        if (degree_array[i] >= t) {
+          m_edge_count++;
+          from = i;
+          to = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+          to = to % n;
           s = graph_->AddEdge(from, to);
-          if (!s.ok()) {
-            std::cout << "add error: " << s.ToString() << std::endl;
-            exit(0);
-          }
-        } else {
-          s = graph_->AddEdge(from, to);
-          if (!s.ok()) {
-            std::cout << "add error: " << s.ToString() << std::endl;
-            exit(0);
-          }
-          s = graph_->AddEdge(to, from);
           if (!s.ok()) {
             std::cout << "add error: " << s.ToString() << std::endl;
             exit(0);
@@ -236,6 +262,121 @@ class GraphBenchmarkTool {
     }
     printf("M = %d when alpha = %f\n", m_edge_count, alpha);
     return;
+  }
+
+  void RunBenchmark(int operation_num, double update_ratio, node_id_t n) {
+    Status s;
+    double read_time_spent = 0, write_time_spent = 0;
+    struct timespec t1, t2;
+    for (int i = 0; i < operation_num; i++) {
+      if (rand() / (double)RAND_MAX < update_ratio) {
+        node_id_t from, to;
+        from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+        from = from % n;
+        to = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+        to = to % n;
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        s = graph_->AddEdge(from, to);
+        clock_gettime(CLOCK_MONOTONIC, &t2);
+        write_time_spent += (t2.tv_sec - t1.tv_sec) +
+                            (double)(t2.tv_nsec - t1.tv_nsec) / 1000000000;
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      } else {
+        node_id_t from;
+        from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+        from = from % n;
+        Edges edges;
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        s = graph_->GetAllEdges(from, &edges);
+        clock_gettime(CLOCK_MONOTONIC, &t2);
+        read_time_spent += (t2.tv_sec - t1.tv_sec) +
+                           (double)(t2.tv_nsec - t1.tv_nsec) / 1000000000;
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      }
+    }
+    std::cout << "\nWrite Time: " << write_time_spent
+              << "\nRead Time: " << read_time_spent
+              << "\nTotal Time: " << write_time_spent + read_time_spent
+              << std::endl;
+  }
+
+  void TradeOffTest(node_id_t n, Options* opt_handle, int section_num = 10,
+                    int section_gap = 4) {
+    Status sta;
+    InitNodes(n);
+    for (int s = 0; s < section_num; s++) {
+      std::cout << "sec:" << s << std::endl;
+      for (int j = 1; j <= section_gap; j++) {
+        for (node_id_t from = 0; from < n; from++) {
+          if (from >= s * (n / section_num)) {
+            node_id_t to = (from + j + section_gap * s) % n;
+            // printf("from = %lld\n", from);
+            // printf("to = %lld\n", to);
+            sta = graph_->AddEdge(from, to);
+            if (!sta.ok()) {
+              std::cout << "add error: " << sta.ToString() << std::endl;
+            }
+          }
+        }
+      }
+    }
+
+    for (int s = 0; s < section_num; s++) {
+      // opt_handle->statistics = rocksdb::CreateDBStatistics();
+      // opt_handle->statistics.get()->set_stats_level(kExceptDetailedTimers);
+      double read_time_spent = 0, write_time_spent = 0;
+      struct timespec t1, t2;
+      for (int i = 0; i < (n / section_num) * 2; i++) {
+        {
+          node_id_t from;
+          from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+          from = s * (n / section_num) + (from % (n / section_num));
+          Edges edges;
+          clock_gettime(CLOCK_MONOTONIC, &t1);
+          sta = graph_->GetAllEdges(from, &edges);
+          clock_gettime(CLOCK_MONOTONIC, &t2);
+          read_time_spent += (t2.tv_sec - t1.tv_sec) +
+                             (double)(t2.tv_nsec - t1.tv_nsec) / 1000000000;
+          if (!sta.ok()) {
+            std::cout << "add error: " << sta.ToString() << std::endl;
+            exit(0);
+          }
+        }
+        {
+          node_id_t from, to;
+          from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+          from = s * (n / section_num) + (from % (n / section_num));
+          to = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
+          // to = s * (n / section_num) + (from % (n / section_num));
+          to = from + 1;
+          clock_gettime(CLOCK_MONOTONIC, &t1);
+          sta = graph_->AddEdge(from, to);
+          clock_gettime(CLOCK_MONOTONIC, &t2);
+          write_time_spent += (t2.tv_sec - t1.tv_sec) +
+                              (double)(t2.tv_nsec - t1.tv_nsec) / 1000000000;
+          if (!sta.ok()) {
+            std::cout << "add error: " << sta.ToString() << std::endl;
+            exit(0);
+          }
+        }
+      }
+      std::cout << "\nWrite Time: " << write_time_spent
+                << "\nRead Time: " << read_time_spent
+                << "\nTotal Time: " << write_time_spent + read_time_spent
+                << std::endl;
+      std::string stat;
+      GetRocksGraphStats(stat);
+      std::cout << stat << std::endl;
+      std::cout << "statistics: " << opt_handle->statistics->ToString()
+                << std::endl;
+    }
+    printLSM();
   }
 
   void RunDegreeFilterBenchmark() {
@@ -281,8 +422,8 @@ class GraphBenchmarkTool {
       for (node_id_t i = 0; i < edges.num_edges_in; i++) {
         std::cout << edges.nxts_in[i].nxt << "\t";
       }
-      std::cout <<" ||\t" << graph_->GetOutDegreeApproximate(from);
-      std::cout <<" ||\t" << graph_->GetInDegreeApproximate(from);
+      std::cout << " ||\t" << graph_->GetOutDegreeApproximate(from);
+      std::cout << " ||\t" << graph_->GetInDegreeApproximate(from);
       std::cout << std::endl;
     }
     return;
@@ -476,6 +617,10 @@ class GraphBenchmarkTool {
   }
 
   void printLSM() { graph_->printLSM(); }
+
+  void SetRatio(double update_ratio, double lookup_ratio) {
+    graph_->SetRatio(update_ratio, lookup_ratio);
+  }
 
  private:
   RocksGraph* graph_;

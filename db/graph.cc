@@ -3,8 +3,9 @@
 namespace ROCKSDB_NAMESPACE {
 
 void inline MergeSortOutEdges(const Edges& existing_edges,
-                              const Edges& new_edges, Edges& merged_edges, node_id_t vertex,
-                              bool is_partial = true, MorrisCounter* mor = NULL) {
+                              const Edges& new_edges, Edges& merged_edges,
+                              node_id_t vertex, bool is_partial = true,
+                              MorrisCounter* mor = NULL) {
   std::vector<node_id_t> delete_edges;
   node_id_t pivot_ex = 0;
   node_id_t pivot_new = 0;
@@ -57,8 +58,9 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
 }
 
 void inline MergeSortInEdges(const Edges& existing_edges,
-                             const Edges& new_edges, Edges& merged_edges, node_id_t vertex,
-                             bool is_partial = true, MorrisCounter* mor = NULL) {
+                             const Edges& new_edges, Edges& merged_edges,
+                             node_id_t vertex, bool is_partial = true,
+                             MorrisCounter* mor = NULL) {
   std::vector<node_id_t> delete_edges;
   node_id_t pivot_ex = 0;
   node_id_t pivot_new = 0;
@@ -123,8 +125,10 @@ bool RocksGraph::AdjacentListMergeOp::Merge(const Slice& key,
       existing_edges.num_edges_out + new_edges.num_edges_out;
   merged_edges.num_edges_in =
       existing_edges.num_edges_in + new_edges.num_edges_in;
-  MergeSortOutEdges(existing_edges, new_edges,merged_edges, decode_node(key.data()), false, morris_out_delete_);
-  MergeSortInEdges(existing_edges, new_edges, merged_edges, decode_node(key.data()), false, morris_in_delete_);
+  MergeSortOutEdges(existing_edges, new_edges, merged_edges,
+                    decode_node(key.data()), false, morris_out_delete_);
+  MergeSortInEdges(existing_edges, new_edges, merged_edges,
+                   decode_node(key.data()), false, morris_in_delete_);
   free_edges(&existing_edges);
   free_edges(&new_edges);
   encode_edges(&merged_edges, new_value, encoding_type_);
@@ -153,8 +157,10 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
       existing_edges.num_edges_out + new_edges.num_edges_out;
   merged_edges.num_edges_in =
       existing_edges.num_edges_in + new_edges.num_edges_in;
-  MergeSortOutEdges(existing_edges, new_edges, merged_edges, decode_node(key.data()), true);
-  MergeSortInEdges(existing_edges, new_edges, merged_edges, decode_node(key.data()), true);
+  MergeSortOutEdges(existing_edges, new_edges, merged_edges,
+                    decode_node(key.data()), true);
+  MergeSortInEdges(existing_edges, new_edges, merged_edges,
+                   decode_node(key.data()), true);
   free_edges(&existing_edges);
   free_edges(&new_edges);
   encode_edges(&merged_edges, new_value, encoding_type_);
@@ -249,7 +255,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
 
   int out_policy = edge_update_policy_;
   if (out_policy == EDGE_UPDATE_ADAPTIVE) {
-    out_policy = AdaptPolicy(from, true);
+    out_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
   if (out_policy == EDGE_UPDATE_LAZY) {
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
@@ -293,7 +299,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   encode_node(v_in, &key_in);
   int in_policy = edge_update_policy_;
   if (in_policy == EDGE_UPDATE_ADAPTIVE) {
-    in_policy = AdaptPolicy(from, false);
+    in_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
   if (in_policy == EDGE_UPDATE_LAZY) {
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
@@ -317,7 +323,8 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
     memcpy(new_edges.nxts_out, existing_edges.nxts_out,
            existing_edges.num_edges_out * sizeof(Edge));
-    bool is_merge = InsertToEdgeList(new_edges.nxts_in, existing_edges.nxts_in,
+    bool is_merge = InsertToEdgeList(new_edges.nxts_in,
+    existing_edges.nxts_in,
                                      existing_edges.num_edges_in, from);
     if (is_merge) new_edges.num_edges_in--;
     std::string new_value;
@@ -340,9 +347,10 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   encode_node(v, &key_out);
   int out_policy = edge_update_policy_;
   if (out_policy == EDGE_UPDATE_ADAPTIVE) {
-    out_policy = AdaptPolicy(from, true);
+    out_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
-  if (edge_update_policy_ == EDGE_UPDATE_LAZY && encoding_type_ != ENCODING_TYPE_EFP) {
+  if (edge_update_policy_ == EDGE_UPDATE_LAZY &&
+      encoding_type_ != ENCODING_TYPE_EFP) {
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
     edges.nxts_out[0] = Edge{.nxt = -to};
@@ -352,7 +360,8 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     if (!s.ok() && !s.IsNotFound()) {
       return s;
     }
-  } else if (edge_update_policy_ == EDGE_UPDATE_EAGER || encoding_type_ == ENCODING_TYPE_EFP) {
+  } else if (edge_update_policy_ == EDGE_UPDATE_EAGER ||
+             encoding_type_ == ENCODING_TYPE_EFP) {
     Edges existing_edges{.num_edges_out = 0};
     s = GetAllEdges(from, &existing_edges);
     if (!s.ok() && !s.IsNotFound()) {
@@ -391,7 +400,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   encode_node(v_in, &key_in);
   int in_policy = edge_update_policy_;
   if (in_policy == EDGE_UPDATE_ADAPTIVE) {
-    in_policy = AdaptPolicy(from, false);
+    in_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
   if (in_policy == EDGE_UPDATE_LAZY && encoding_type_ != ENCODING_TYPE_EFP) {
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
@@ -403,7 +412,8 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     if (!s.ok() && !s.IsNotFound()) {
       return s;
     }
-  } else if (in_policy == EDGE_UPDATE_EAGER || encoding_type_ == ENCODING_TYPE_EFP) {
+  } else if (in_policy == EDGE_UPDATE_EAGER ||
+             encoding_type_ == ENCODING_TYPE_EFP) {
     Edges existing_edges{.num_edges_in = 0};
     s = GetAllEdges(to, &existing_edges);
     if (!s.ok() && !s.IsNotFound()) {
@@ -449,6 +459,17 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
   if (!s.ok()) {
     return s;
   }
+  // if(edge_update_policy_ != EDGE_UPDATE_EAGER){
+  // GetMergeOperandsOptions merge_operands_info;
+  // int number_of_operands = 0;
+  // int maximum_levels = 10;
+  // merge_operands_info.expected_max_number_of_operands = maximum_levels;
+  // std::vector<PinnableSlice> values(maximum_levels);
+  // s = db_->GetMergeOperands(ReadOptions(), adj_cf_, key,
+  //                           values.data(), &merge_operands_info,
+  //                           &number_of_operands);
+  // }
+
   decode_edges(edges, value, encoding_type_);
   return Status::OK();
 }

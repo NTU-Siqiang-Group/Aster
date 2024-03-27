@@ -247,11 +247,13 @@ void inline readMeta(const std::string& filePath, GraphMeta& meta) {
 
 class RocksGraph {
  public:
+  node_id_t n, m;
   int filter_type_ = FILTER_TYPE_MORRIS;
   int encoding_type_ = ENCODING_TYPE_NONE;
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
   bool auto_reinitialize_ = false;
-  double update_ratio = 0.5;
+  double update_ratio_ = 0.5;
+  double lookup_ratio_ = 0.5;
   std::string db_path = "/tmp/demo";
   std::string meta_filename = "/GraphMeta.log";
 
@@ -277,11 +279,11 @@ class RocksGraph {
   RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE,
              int encoding_type = ENCODING_TYPE_NONE,
              bool auto_reinitialize = false)
-      : encoding_type_(encoding_type),
+      : n(0),
+        m(0),
+        encoding_type_(encoding_type),
         edge_update_policy_(edge_update_policy),
         auto_reinitialize_(auto_reinitialize),
-        n(0),
-        m(0),
         cms_out(),
         cms_in(),
         mor_out(),
@@ -357,13 +359,38 @@ class RocksGraph {
     return 0;
   }
 
-  int AdaptPolicy(node_id_t src, bool is_out_edge = true) {
+  void SetRatio(double update_ratio, double lookup_ratio) {
+    update_ratio_ = update_ratio;
+    lookup_ratio_ = lookup_ratio;
+  }
+
+  int AdaptPolicy(node_id_t src, double update_ratio, double lookup_ratio) {
     node_id_t block_size = 2 << 11;
-    node_id_t thereshold = (block_size - sizeof(node_id_t)) / sizeof(node_id_t);
-    printf("thereshold = %d\n", (int)thereshold);
-    node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src)
-                                   : GetInDegreeApproximate(src);
-    if (degree < thereshold) {
+    node_id_t vertex_space = sizeof(node_id_t);
+    node_id_t edge_space = sizeof(edge_id_t);
+    // node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src)
+    //                                : GetInDegreeApproximate(src);
+    node_id_t degree =
+        GetOutDegreeApproximate(src) + GetInDegreeApproximate(src);
+    double level_num = 1.9;
+    double WA =
+        db_->GetOptions().max_bytes_for_level_multiplier * level_num;
+    double cache_miss_rate = 1.0;
+    double left =
+        cache_miss_rate * (1 + (double)(vertex_space + edge_space * degree) /
+                                   (double)block_size) +
+        (double)(edge_space * (degree - 1)) * WA / (double)(block_size);
+    double right =
+        cache_miss_rate * ((double)m / (double)n) *
+        (lookup_ratio /
+         double(db_->GetOptions().max_bytes_for_level_multiplier - 1) /
+         update_ratio);
+    // if (degree < 256) {
+    //   return EDGE_UPDATE_EAGER;
+    // } else {
+    //   return EDGE_UPDATE_LAZY;
+    // }
+    if (left < right) {
       return EDGE_UPDATE_EAGER;
     } else {
       return EDGE_UPDATE_LAZY;
@@ -411,7 +438,6 @@ class RocksGraph {
 
  private:
   node_id_t random_walk(node_id_t start, float decay_factor = 0.20);
-  node_id_t n, m;
   DB* db_;
   // bool is_lazy_;
   ColumnFamilyHandle *val_cf_, *adj_cf_;
