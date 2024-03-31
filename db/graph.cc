@@ -45,6 +45,7 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
     if (existing_edges.nxts_out[pivot_ex].nxt ==
         new_edges.nxts_out[pivot_new].nxt) {
       pivot_ex++;
+      mor->AddCounter(vertex);
     } else if (existing_edges.nxts_out[pivot_ex].nxt >
                new_edges.nxts_out[pivot_new].nxt) {
       merge_edges_list[edge_count++].nxt = new_edges.nxts_out[pivot_new++].nxt;
@@ -94,6 +95,7 @@ void inline MergeSortInEdges(const Edges& existing_edges,
     if (existing_edges.nxts_in[pivot_ex].nxt ==
         new_edges.nxts_in[pivot_new].nxt) {
       pivot_ex++;
+      mor->AddCounter(vertex);
     } else if (existing_edges.nxts_in[pivot_ex].nxt >
                new_edges.nxts_in[pivot_new].nxt) {
       merge_edges_list[edge_count++].nxt = new_edges.nxts_in[pivot_new++].nxt;
@@ -158,9 +160,9 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
   merged_edges.num_edges_in =
       existing_edges.num_edges_in + new_edges.num_edges_in;
   MergeSortOutEdges(existing_edges, new_edges, merged_edges,
-                    decode_node(key.data()), true);
+                    decode_node(key.data()), true, morris_out_delete_);
   MergeSortInEdges(existing_edges, new_edges, merged_edges,
-                   decode_node(key.data()), true);
+                   decode_node(key.data()), true, morris_in_delete_);
   free_edges(&existing_edges);
   free_edges(&new_edges);
   encode_edges(&merged_edges, new_value, encoding_type_);
@@ -235,14 +237,14 @@ Status RocksGraph::AddVertex(node_id_t id) {
 }
 
 Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
-  if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
-    cms_out.UpdateSketch(from);
-    cms_in.UpdateSketch(to);
-  }
-  if (filter_type_ == FILTER_TYPE_MORRIS || FILTER_TYPE_ALL) {
-    mor_out.AddCounter(from);
-    mor_in.AddCounter(to);
-  }
+  // if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
+  //   cms_out.UpdateSketch(from);
+  //   cms_in.UpdateSketch(to);
+  // }
+  // if (filter_type_ == FILTER_TYPE_MORRIS || FILTER_TYPE_ALL) {
+  //   mor_out.AddCounter(from);
+  //   mor_in.AddCounter(to);
+  // }
 
   Status s;
   m++;
@@ -258,6 +260,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     out_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
   if (out_policy == EDGE_UPDATE_LAZY) {
+    mor_out.AddCounter(from);
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
     edges.nxts_out[0] = Edge{.nxt = to};
@@ -283,7 +286,10 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     bool is_merge =
         InsertToEdgeList(new_edges.nxts_out, existing_edges.nxts_out,
                          existing_edges.num_edges_out, to);
-    if (is_merge) new_edges.num_edges_out--;
+    if (is_merge)
+      new_edges.num_edges_out--;
+    else
+      mor_out.AddCounter(from);
     std::string new_value;
     encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
@@ -302,6 +308,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     in_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
   if (in_policy == EDGE_UPDATE_LAZY) {
+    mor_in.AddCounter(to);
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
     edges.nxts_in = new Edge[1];
     edges.nxts_in[0] = Edge{.nxt = from};
@@ -323,10 +330,12 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
     memcpy(new_edges.nxts_out, existing_edges.nxts_out,
            existing_edges.num_edges_out * sizeof(Edge));
-    bool is_merge = InsertToEdgeList(new_edges.nxts_in,
-    existing_edges.nxts_in,
+    bool is_merge = InsertToEdgeList(new_edges.nxts_in, existing_edges.nxts_in,
                                      existing_edges.num_edges_in, from);
-    if (is_merge) new_edges.num_edges_in--;
+    if (is_merge)
+      new_edges.num_edges_in--;
+    else
+      mor_in.AddCounter(to);
     std::string new_value;
     encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);

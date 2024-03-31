@@ -164,7 +164,8 @@ class GraphBenchmarkTool {
 
   void LoadRandomGraph(node_id_t n, node_id_t m) {
     Status s;
-    InitNodes(n);
+    if(reinit_)
+      InitNodes(n);
     for (int i = 0; i < m; i++) {
       if (i % (m / 100) == 0) {
         printf("\r");

@@ -223,28 +223,6 @@ struct GraphMeta {
   node_id_t m = 0;
 };
 
-void inline writeMeta(const std::string& filePath, GraphMeta meta) {
-  std::ofstream outFile(filePath, std::ios::binary);
-  if (!outFile) {
-    return;
-    // throw std::runtime_error("Cannot open file for writing");
-  }
-  outFile.write(reinterpret_cast<const char*>(&meta.n), sizeof(meta.n));
-  outFile.write(reinterpret_cast<const char*>(&meta.m), sizeof(meta.m));
-  outFile.close();
-}
-
-void inline readMeta(const std::string& filePath, GraphMeta& meta) {
-  std::ifstream inFile(filePath, std::ios::binary);
-  if (!inFile) {
-    return;
-    // throw std::runtime_error("Cannot open file for reading");
-  }
-  inFile.read(reinterpret_cast<char*>(&meta.n), sizeof(meta.n));
-  inFile.read(reinterpret_cast<char*>(&meta.m), sizeof(meta.m));
-  inFile.close();
-}
-
 class RocksGraph {
  public:
   node_id_t n, m;
@@ -298,7 +276,7 @@ class RocksGraph {
         options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
     table_options->filter_policy.reset(rocksdb::NewBloomFilterPolicy(5, false));
     options.level_compaction_dynamic_level_bytes = false;
-    if (filter_type_ == FILTER_TYPE_CMS || FILTER_TYPE_ALL) {
+    if (filter_type_ == FILTER_TYPE_CMS || filter_type_ == FILTER_TYPE_ALL) {
       cms_out = CountMinSketch(cms_delta, cms_epsilon);
       cms_in = CountMinSketch(cms_delta, cms_epsilon);
     }
@@ -313,7 +291,7 @@ class RocksGraph {
       DestroyDB(db_path, options);
     } else {
       GraphMeta meta;
-      readMeta(db_path + meta_filename, meta);
+      ReadMeta(db_path + meta_filename, meta);
       n = meta.n;
       m = meta.m;
     }
@@ -328,7 +306,7 @@ class RocksGraph {
 
   ~RocksGraph() {
     GraphMeta meta{.m = m, .n = n};
-    writeMeta(db_path + meta_filename, meta);
+    WriteMeta(db_path + meta_filename, meta);
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(val_cf_);
     db_->SyncWAL();
@@ -348,6 +326,65 @@ class RocksGraph {
   Status SimpleWalk(node_id_t start, float decay_factor = 0.20);
   void GetRocksDBStats(std::string& stat) {
     db_->GetProperty("rocksdb.stats", &stat);
+  }
+
+  void inline WriteMorrisCounter(std::ofstream& outFile,
+                                 const MorrisCounter& counter) {
+    size_t size = counter.counters.size();
+    outFile.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    if (!counter.counters.empty()) {
+      outFile.write(reinterpret_cast<const char*>(counter.counters.data()),
+                    counter.counters.size() * sizeof(counter.counters[0]));
+    }
+    outFile.write(reinterpret_cast<const char*>(&counter.exponent_bits),
+                  sizeof(counter.exponent_bits));
+    outFile.write(reinterpret_cast<const char*>(&counter.mantissa_bits),
+                  sizeof(counter.mantissa_bits));
+  }
+
+  void ReadMorrisCounter(std::ifstream& inFile, MorrisCounter& counter) {
+    size_t size;
+    inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+    counter.counters.resize(size);
+    if (!counter.counters.empty()) {
+      inFile.read(reinterpret_cast<char*>(counter.counters.data()),
+                  counter.counters.size() * sizeof(counter.counters[0]));
+    }
+
+    inFile.read(reinterpret_cast<char*>(&counter.exponent_bits),
+                sizeof(counter.exponent_bits));
+    inFile.read(reinterpret_cast<char*>(&counter.mantissa_bits),
+                sizeof(counter.mantissa_bits));
+  }
+
+  void inline WriteMeta(const std::string& filePath, GraphMeta meta) {
+    std::ofstream outFile(filePath, std::ios::binary);
+    if (!outFile) {
+      return;
+      // throw std::runtime_error("Cannot open file for writing");
+    }
+    outFile.write(reinterpret_cast<const char*>(&meta.n), sizeof(meta.n));
+    outFile.write(reinterpret_cast<const char*>(&meta.m), sizeof(meta.m));
+    WriteMorrisCounter(outFile, mor_out);
+    WriteMorrisCounter(outFile, mor_in);
+    WriteMorrisCounter(outFile, mor_out_delete);
+    WriteMorrisCounter(outFile, mor_in_delete);
+    outFile.close();
+  }
+
+  void inline ReadMeta(const std::string& filePath, GraphMeta& meta) {
+    std::ifstream inFile(filePath, std::ios::binary);
+    if (!inFile) {
+      return;
+      // throw std::runtime_error("Cannot open file for reading");
+    }
+    inFile.read(reinterpret_cast<char*>(&meta.n), sizeof(meta.n));
+    inFile.read(reinterpret_cast<char*>(&meta.m), sizeof(meta.m));
+    ReadMorrisCounter(inFile, mor_out);
+    ReadMorrisCounter(inFile, mor_in);
+    ReadMorrisCounter(inFile, mor_out_delete);
+    ReadMorrisCounter(inFile, mor_in_delete);
+    inFile.close();
   }
 
   size_t GetDegreeFilterSize(int filter_type) {
@@ -372,9 +409,8 @@ class RocksGraph {
     //                                : GetInDegreeApproximate(src);
     node_id_t degree =
         GetOutDegreeApproximate(src) + GetInDegreeApproximate(src);
-    double level_num = 1.9;
-    double WA =
-        db_->GetOptions().max_bytes_for_level_multiplier * level_num;
+    double level_num = 2.5;
+    double WA = db_->GetOptions().max_bytes_for_level_multiplier * level_num;
     double cache_miss_rate = 1.0;
     double left =
         cache_miss_rate * (1 + (double)(vertex_space + edge_space * degree) /

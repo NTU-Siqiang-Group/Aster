@@ -37,6 +37,8 @@ int main(int argc, char* argv[]) {
     }else if(arg == "--direct_io"){
       options.use_direct_io_for_flush_and_compaction = true;
       options.use_direct_reads = true;
+    }else if(arg == "--no_reinit"){
+        reinit = false;
     }
   }
 
@@ -57,15 +59,17 @@ int main(int argc, char* argv[]) {
   table_options.block_cache = cache;
   options.table_factory.reset(NewBlockBasedTableFactory(table_options));
   rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy, encoding_type, reinit);
-  int load_n = 400000;
-  int load_m = 10000000;
+  // int load_n = 400000;
+  // int load_m = 10000000;
+  int load_n = 100000;
+  int load_m = 1000000;
   double update_ratio = 0.5;
   tool.SetRatio(update_ratio, 1 - update_ratio);
   // tool.TradeOffTest(load_n, &options);
   // return 0;
   auto load_start = std::chrono::steady_clock::now();
-  //tool.LoadRandomGraph(load_n, load_m);
-  tool.LoadPowerLawGraphNew(load_n, 2);
+  tool.LoadRandomGraph(load_n, load_m);
+  //tool.LoadPowerLawGraphNew(load_n, 2);
   //tool.DeleteTest();
       
   auto load_end = std::chrono::steady_clock::now();
@@ -75,27 +79,29 @@ int main(int argc, char* argv[]) {
                    .count() / (double) load_m
             << std::endl;
 
-  // auto exec_start = std::chrono::steady_clock::now();
-  // int get_n = 100;
-  // tool.RandomLookups(load_n, get_n);
-  // // tool.CompareDegreeFilterAccuracy(40000, 40000);
-  // // tool.Execute("/home/junfeng/Desktop/dataset/soc-pokec/workload2.txt");
-  // auto exec_end = std::chrono::steady_clock::now();
-  // std::cout << "get latency: "
-  //           << std::chrono::duration_cast<std::chrono::nanoseconds>(exec_end -
-  //                                                               exec_start)
-  //                  .count() / (double) get_n
-  //           << std::endl;
-  std::string stat;
-  tool.GetRocksGraphStats(stat);
-  std::cout << stat << std::endl;
-  std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+  auto exec_start = std::chrono::steady_clock::now();
+  int get_n = 100;
+  tool.RandomLookups(load_n, get_n);
+  // tool.CompareDegreeFilterAccuracy(40000, 40000);
+  // tool.Execute("/home/junfeng/Desktop/dataset/soc-pokec/workload2.txt");
+  auto exec_end = std::chrono::steady_clock::now();
+  std::cout << "get latency: "
+            << std::chrono::duration_cast<std::chrono::nanoseconds>(exec_end -
+                                                                exec_start)
+                   .count() / (double) get_n
+            << std::endl;
 
-  tool.RunBenchmark(load_n, update_ratio, load_n);
 
-  tool.GetRocksGraphStats(stat);
-  std::cout << stat << std::endl;
-  std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+  // std::string stat;
+  // tool.GetRocksGraphStats(stat);
+  // std::cout << stat << std::endl;
+  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+
+  // tool.RunBenchmark(load_n, update_ratio, load_n);
+
+  // tool.GetRocksGraphStats(stat);
+  // std::cout << stat << std::endl;
+  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
 
   tool.printLSM();
 }

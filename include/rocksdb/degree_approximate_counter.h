@@ -38,8 +38,8 @@ class CountMinSketch {
   {
     table_width = ceil(exp(1) / epsilon);
     table_height = ceil(log(1 / delta));
-    std::cout << "table_width: " << table_width << "\t table_height: "
-              << table_height << std::endl;
+    // std::cout << "table_width: " << table_width << "\t table_height: "
+    //           << table_height << std::endl;
     table.resize(table_height);
     for (size_t i = 0; i < table.size(); i++) {
       table.at(i).resize(table_width, 0);
@@ -99,6 +99,12 @@ class CountMinSketch {
 
 class MorrisCounter {
  public:
+  std::vector<unsigned char> counters;
+  int exponent_bits = 3;
+  int mantissa_bits = 5;
+  std::random_device rd;
+  boost::mt19937 rand_gen;
+  
   MorrisCounter(vertex_id_t n) : rand_gen(rd()) { counters.resize(n, 0); }
 
   MorrisCounter() : rand_gen(rd()) { counters.resize(1); }
@@ -142,13 +148,6 @@ class MorrisCounter {
   size_t CalcMemoryUsage(){
     return calculateMemoryUsage(counters);
   }
-
- protected:
-  std::vector<unsigned char> counters;
-  int exponent_bits = 3;
-  int mantissa_bits = 5;
-  std::random_device rd;
-  boost::mt19937 rand_gen;
 };
 
 }  // namespace ROCKSDB_NAMESPACE
