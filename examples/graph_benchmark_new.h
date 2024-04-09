@@ -164,6 +164,7 @@ class GraphBenchmarkTool {
 
   void LoadRandomGraph(node_id_t n, node_id_t m) {
     Status s;
+    //srand(time(NULL));
     if(reinit_)
       InitNodes(n);
     for (int i = 0; i < m; i++) {
@@ -270,6 +271,7 @@ class GraphBenchmarkTool {
     double read_time_spent = 0, write_time_spent = 0;
     struct timespec t1, t2;
     for (int i = 0; i < operation_num; i++) {
+      
       if (rand() / (double)RAND_MAX < update_ratio) {
         node_id_t from, to;
         from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
@@ -289,16 +291,17 @@ class GraphBenchmarkTool {
         node_id_t from;
         from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
         from = from % n;
-        Edges edges;
+        Edges edges{.num_edges_out = 0, .num_edges_in = 0};
         clock_gettime(CLOCK_MONOTONIC, &t1);
         s = graph_->GetAllEdges(from, &edges);
         clock_gettime(CLOCK_MONOTONIC, &t2);
         read_time_spent += (t2.tv_sec - t1.tv_sec) +
                            (double)(t2.tv_nsec - t1.tv_nsec) / 1000000000;
-        if (!s.ok()) {
-          std::cout << "add error: " << s.ToString() << std::endl;
-          exit(0);
-        }
+        free_edges(&edges);
+        // if (!s.ok()) {
+        //   std::cout << "add error: " << s.ToString() << std::endl;
+        //   exit(0);
+        // }
       }
     }
     std::cout << "\nWrite Time: " << write_time_spent
@@ -417,14 +420,15 @@ class GraphBenchmarkTool {
       }
       std::cout << from << " ||\t";
       for (node_id_t i = 0; i < edges.num_edges_out; i++) {
-        std::cout << edges.nxts_out[i].nxt << "\t";
+        std::cout << edges.nxts_out[i].nxt << "\t ";
       }
       std::cout << " ||\t";
       for (node_id_t i = 0; i < edges.num_edges_in; i++) {
-        std::cout << edges.nxts_in[i].nxt << "\t";
+        std::cout << edges.nxts_in[i].nxt << "\t ";
       }
-      std::cout << " ||\t" << graph_->GetOutDegreeApproximate(from);
-      std::cout << " ||\t" << graph_->GetInDegreeApproximate(from);
+      std::cout << " ||\t" << edges.num_edges_out + edges.num_edges_in;
+      std::cout << " ||\t" << graph_->GetDegreeApproximate(from);
+      //std::cout << " ||\t" << graph_->GetInDegreeApproximate(from);
       std::cout << std::endl;
     }
     return;
@@ -544,16 +548,16 @@ class GraphBenchmarkTool {
         exit(0);
       }
       int real_degree = edges.num_edges_out;
-      cms_absolute_error += abs(
-          real_degree - graph_->GetOutDegreeApproximate(from, FILTER_TYPE_CMS));
-      cms_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-                                                  from, FILTER_TYPE_CMS)) /
-                            (double)real_degree;
-      mor_absolute_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-                                                  from, FILTER_TYPE_MORRIS));
-      mor_relative_error += abs(real_degree - graph_->GetOutDegreeApproximate(
-                                                  from, FILTER_TYPE_MORRIS)) /
-                            (double)real_degree;
+      // cms_absolute_error += abs(
+      //     real_degree - graph_->GetDegreeApproximate(from, FILTER_TYPE_CMS));
+      // cms_relative_error += abs(real_degree - graph_->GetDegreeApproximate(
+      //                                             from, FILTER_TYPE_CMS)) /
+      //                       (double)real_degree;
+      // mor_absolute_error += abs(real_degree - graph_->GetDegreeApproximate(
+      //                                             from, FILTER_TYPE_MORRIS));
+      // mor_relative_error += abs(real_degree - graph_->GetDegreeApproximate(
+      //                                             from, FILTER_TYPE_MORRIS)) /
+      //                       (double)real_degree;
       std::cout << from << " ||\t";
       for (node_id_t i = 0; i < edges.num_edges_out; i++) {
         std::cout << edges.nxts_out[i].nxt << "\t";

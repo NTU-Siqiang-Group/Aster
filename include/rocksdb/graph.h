@@ -20,6 +20,7 @@ using edge_id_t = int64_t;
 #define EDGE_UPDATE_EAGER 0x0
 #define EDGE_UPDATE_LAZY 0x1
 #define EDGE_UPDATE_ADAPTIVE 0x2
+#define EDGE_UPDATE_FULL_LAZY 0x3
 
 #define KEY_TYPE_ADJENCENT_LIST 0x0
 #define KEY_TYPE_VERTEX_VAL 0x1
@@ -84,6 +85,14 @@ void inline encode_node(VertexKey v, std::string* key) {
   // }
 }
 
+void inline encode_node_hash(VertexKey v, node_id_t edge, std::string* key) {
+  int byte_to_fill = sizeof(v.id);
+  for (int i = byte_to_fill - 1; i >= 0; i--) {
+    key->push_back((v.id >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+  }
+  key->push_back(static_cast<char>(edge & 0xFF));
+}
+
 void inline decode_node(VertexKey* v, const std::string& key) {
   *v = *reinterpret_cast<const VertexKey*>(key.data());
 }
@@ -110,7 +119,7 @@ void inline encode_edge(const Edge* edge, std::string* value) {
 
 void inline encode_edges(
     const Edges* edges, std::string* value,
-    int encoding_type = ENCODING_TYPE_NONE,
+    int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   // copy the number of edges
   // value->append(reinterpret_cast<const char*>(edges), sizeof(int) +
@@ -164,7 +173,7 @@ void inline encode_edges(
 
 void inline decode_edges(
     Edges* edges, const std::string& value,
-    int encoding_type = ENCODING_TYPE_NONE,
+    int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
@@ -238,13 +247,12 @@ class RocksGraph {
   class AdjacentListMergeOp : public AssociativeMergeOperator {
    public:
     int encoding_type_;
-    MorrisCounter* morris_out_delete_;
-    MorrisCounter* morris_in_delete_;
-    AdjacentListMergeOp(int encoding_type, MorrisCounter* morris_out_delete,
-                        MorrisCounter* morris_in_delete)
+    MorrisCounter* morris_;
+    node_id_t* m_;
+    AdjacentListMergeOp(int encoding_type, MorrisCounter* morris, node_id_t &m)
         : encoding_type_(encoding_type),
-          morris_out_delete_(morris_out_delete),
-          morris_in_delete_(morris_in_delete) {}
+          morris_(morris),
+          m_(&m) {}
     virtual ~AdjacentListMergeOp() override{};
     virtual bool Merge(const Slice& key, const Slice* existing_value,
                        const Slice& value, std::string* new_value,
@@ -264,17 +272,14 @@ class RocksGraph {
         auto_reinitialize_(auto_reinitialize),
         cms_out(),
         cms_in(),
-        mor_out(),
-        mor_out_delete(),
-        mor_in(),
-        mor_in_delete() {
+        mor(){
     if (edge_update_policy != EDGE_UPDATE_EAGER) {
       options.merge_operator.reset(new AdjacentListMergeOp(
-          encoding_type_, &mor_out_delete, &mor_in_delete));
+          encoding_type_, &mor, m));
     }
     auto table_options =
         options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
-    table_options->filter_policy.reset(rocksdb::NewBloomFilterPolicy(5, false));
+    table_options->filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
     options.level_compaction_dynamic_level_bytes = false;
     if (filter_type_ == FILTER_TYPE_CMS || filter_type_ == FILTER_TYPE_ALL) {
       cms_out = CountMinSketch(cms_delta, cms_epsilon);
@@ -321,8 +326,8 @@ class RocksGraph {
   Status GetAllEdges(node_id_t src, Edges* edges);
   node_id_t GetOutDegree(node_id_t id);
   node_id_t GetInDegree(node_id_t id);
-  node_id_t GetOutDegreeApproximate(node_id_t id, int filter_type_manual = 0);
-  node_id_t GetInDegreeApproximate(node_id_t id, int filter_type_manual = 0);
+  node_id_t GetDegreeApproximate(node_id_t id, int filter_type_manual = 0);
+  //node_id_t GetInDegreeApproximate(node_id_t id, int filter_type_manual = 0);
   Status SimpleWalk(node_id_t start, float decay_factor = 0.20);
   void GetRocksDBStats(std::string& stat) {
     db_->GetProperty("rocksdb.stats", &stat);
@@ -365,10 +370,7 @@ class RocksGraph {
     }
     outFile.write(reinterpret_cast<const char*>(&meta.n), sizeof(meta.n));
     outFile.write(reinterpret_cast<const char*>(&meta.m), sizeof(meta.m));
-    WriteMorrisCounter(outFile, mor_out);
-    WriteMorrisCounter(outFile, mor_in);
-    WriteMorrisCounter(outFile, mor_out_delete);
-    WriteMorrisCounter(outFile, mor_in_delete);
+    WriteMorrisCounter(outFile, mor);
     outFile.close();
   }
 
@@ -380,10 +382,7 @@ class RocksGraph {
     }
     inFile.read(reinterpret_cast<char*>(&meta.n), sizeof(meta.n));
     inFile.read(reinterpret_cast<char*>(&meta.m), sizeof(meta.m));
-    ReadMorrisCounter(inFile, mor_out);
-    ReadMorrisCounter(inFile, mor_in);
-    ReadMorrisCounter(inFile, mor_out_delete);
-    ReadMorrisCounter(inFile, mor_in_delete);
+    ReadMorrisCounter(inFile, mor);
     inFile.close();
   }
 
@@ -391,7 +390,7 @@ class RocksGraph {
     if (filter_type == FILTER_TYPE_CMS) {
       return cms_out.CalcMemoryUsage();
     } else if (filter_type == FILTER_TYPE_MORRIS) {
-      return mor_out.CalcMemoryUsage();
+      return mor.CalcMemoryUsage();
     }
     return 0;
   }
@@ -402,16 +401,20 @@ class RocksGraph {
   }
 
   int AdaptPolicy(node_id_t src, double update_ratio, double lookup_ratio) {
+    if(level_num_update_countdown == 0){
+      level_num_update_countdown = 10000;
+      UpdateLevelNum();
+    }
+    level_num_update_countdown--;
     node_id_t block_size = 2 << 11;
     node_id_t vertex_space = sizeof(node_id_t);
     node_id_t edge_space = sizeof(edge_id_t);
     // node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src)
     //                                : GetInDegreeApproximate(src);
     node_id_t degree =
-        GetOutDegreeApproximate(src) + GetInDegreeApproximate(src);
-    double level_num = 2.5;
+        GetDegreeApproximate(src);
     double WA = db_->GetOptions().max_bytes_for_level_multiplier * level_num;
-    double cache_miss_rate = 1.0;
+    double cache_miss_rate = 0.9;
     double left =
         cache_miss_rate * (1 + (double)(vertex_space + edge_space * degree) /
                                    (double)block_size) +
@@ -431,6 +434,17 @@ class RocksGraph {
     } else {
       return EDGE_UPDATE_LAZY;
     }
+  }
+
+  void UpdateLevelNum(){
+    ColumnFamilyMetaData cf_meta;
+    db_->GetColumnFamilyMetaData(adj_cf_, &cf_meta);
+    for (auto level : cf_meta.levels) {
+      if (level.files.size() > 0) {
+        level_num = level.level;
+      }
+    }
+    //std::cout << "level_num: " << level_num << std::endl;
   }
 
   // Status GetVertexVal(node_id_t id, Value* val);
@@ -479,10 +493,13 @@ class RocksGraph {
   ColumnFamilyHandle *val_cf_, *adj_cf_;
   CountMinSketch cms_out;
   CountMinSketch cms_in;
-  MorrisCounter mor_out;
-  MorrisCounter mor_out_delete;
-  MorrisCounter mor_in;
-  MorrisCounter mor_in_delete;
+  MorrisCounter mor;
+  double level_num = 2.5;
+  int level_num_update_countdown = 0;
+  // MorrisCounter mor_out;
+  // MorrisCounter mor_out_delete;
+  // MorrisCounter mor_in;
+  // MorrisCounter mor_in_delete;
   double cms_delta = 0.1;
   double cms_epsilon = 1.0 / 12000;
 };

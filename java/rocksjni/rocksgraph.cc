@@ -38,12 +38,25 @@
  * Method:    Reinitialize
  * Signature: (JI)J
  */
-jlong Java_org_rocksdb_RocksGraph_Reinitialize(JNIEnv*, jclass,
-                                               jlong jopt_handle,
-                                               jint update_policy) {
+jlong Java_org_rocksdb_RocksGraph_Reinitialize__JI(JNIEnv*, jclass,
+                                                   jlong jopt_handle,
+                                                   jint update_policy) {
   auto* opt = reinterpret_cast<ROCKSDB_NAMESPACE::Options*>(jopt_handle);
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       new ROCKSDB_NAMESPACE::RocksGraph(*opt, static_cast<int>(update_policy));
+  return GET_CPLUSPLUS_POINTER(graph_db);
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    Reinitialize
+ * Signature: (JII)J
+ */
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_Reinitialize__JII(
+    JNIEnv*, jclass, jlong jopt_handle, jint update_policy, jint encoding) {
+  auto* opt = reinterpret_cast<ROCKSDB_NAMESPACE::Options*>(jopt_handle);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      new ROCKSDB_NAMESPACE::RocksGraph(*opt, static_cast<int>(update_policy), static_cast<int>(encoding));
   return GET_CPLUSPLUS_POINTER(graph_db);
 }
 
@@ -106,11 +119,11 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_DeleteEdge(
  * Method:    CountVertex
  * Signature: (J)J
  */
-JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountVertex
-  (JNIEnv *, jobject, jlong jdb_handle){
-    ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+JNIEXPORT jlong JNICALL
+Java_org_rocksdb_RocksGraph_CountVertex(JNIEnv*, jobject, jlong jdb_handle) {
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-    return static_cast<jlong>(graph_db->CountVertex());
+  return static_cast<jlong>(graph_db->CountVertex());
 }
 
 /*
@@ -118,11 +131,11 @@ JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountVertex
  * Method:    CountEdge
  * Signature: (J)J
  */
-JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_CountEdge
-  (JNIEnv *, jobject, jlong jdb_handle){
-    ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+JNIEXPORT jlong JNICALL
+Java_org_rocksdb_RocksGraph_CountEdge(JNIEnv*, jobject, jlong jdb_handle) {
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-    return static_cast<jlong>(graph_db->CountEdge());
+  return static_cast<jlong>(graph_db->CountEdge());
 }
 
 /*
@@ -235,31 +248,31 @@ JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_OutDegree(JNIEnv*, jobject,
   return static_cast<jint>(edges.num_edges_out);
 }
 
-/*
- * Class:     org_rocksdb_RocksGraph
- * Method:    InDegreeFast
- * Signature: (JJ)I
- */
-JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_InDegreeFast(
-    JNIEnv, jobject, jlong jdb_handle, jlong id) {
-  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
-      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-  return static_cast<jint>(graph_db->GetInDegreeApproximate(
-      static_cast<ROCKSDB_NAMESPACE::node_id_t>(id)));
-}
+// /*
+//  * Class:     org_rocksdb_RocksGraph
+//  * Method:    InDegreeFast
+//  * Signature: (JJ)I
+//  */
+// JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_InDegreeFast(
+//     JNIEnv, jobject, jlong jdb_handle, jlong id) {
+//   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+//       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+//   return static_cast<jint>(graph_db->GetInDegreeApproximate(
+//       static_cast<ROCKSDB_NAMESPACE::node_id_t>(id)));
+// }
 
-/*
- * Class:     org_rocksdb_RocksGraph
- * Method:    OutDegreeFast
- * Signature: (JJ)I
- */
-JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_OutDegreeFast(
-    JNIEnv, jobject, jlong jdb_handle, jlong id) {
-  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
-      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-  return static_cast<jint>(graph_db->GetOutDegreeApproximate(
-      static_cast<ROCKSDB_NAMESPACE::node_id_t>(id)));
-}
+// /*
+//  * Class:     org_rocksdb_RocksGraph
+//  * Method:    OutDegreeFast
+//  * Signature: (JJ)I
+//  */
+// JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_OutDegreeFast(
+//     JNIEnv, jobject, jlong jdb_handle, jlong id) {
+//   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+//       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+//   return static_cast<jint>(graph_db->GetOutDegreeApproximate(
+//       static_cast<ROCKSDB_NAMESPACE::node_id_t>(id)));
+// }
 
 /*
  * Class:     org_rocksdb_RocksGraph

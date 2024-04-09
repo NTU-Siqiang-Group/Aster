@@ -39,11 +39,10 @@ int main(int argc, char* argv[]) {
       options.use_direct_reads = true;
     }else if(arg == "--no_reinit"){
         reinit = false;
+    }else if(arg == "--encode"){
+        encoding_type = atoi(argv[i + 1]);
     }
   }
-
-  
-
   
   if (FLAGS_enable_bloom_filter) {
     setup_bloom_filter(options);
@@ -92,16 +91,16 @@ int main(int argc, char* argv[]) {
             << std::endl;
 
 
-  // std::string stat;
-  // tool.GetRocksGraphStats(stat);
-  // std::cout << stat << std::endl;
-  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+  std::string stat;
+  tool.GetRocksGraphStats(stat);
+  std::cout << stat << std::endl;
+  std::cout << "statistics: " << options.statistics->ToString() << std::endl;
 
-  // tool.RunBenchmark(load_n, update_ratio, load_n);
+  tool.RunBenchmark(load_n, update_ratio, load_n);
 
-  // tool.GetRocksGraphStats(stat);
-  // std::cout << stat << std::endl;
-  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+  tool.GetRocksGraphStats(stat);
+  std::cout << stat << std::endl;
+  std::cout << "statistics: " << options.statistics->ToString() << std::endl;
 
   tool.printLSM();
 }

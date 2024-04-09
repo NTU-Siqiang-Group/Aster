@@ -2002,7 +2002,6 @@ struct indexed_sequence {
         m_type = index_type(bv.get_word56(offset) &
                             ((uint64_t(1) << type_bits) - 1));
       }
-
       switch (m_type) {
         case elias_fano:
           m_ef_enumerator = compact_elias_fano::enumerator(
@@ -2230,13 +2229,13 @@ struct uniform_partitioned_sequence {
     value_type QS_ALWAYSINLINE move(uint64_t position) {
       assert(position <= size());
       m_position = position;
-
+      //std::cout<<"position: " << position << "|";
       if (m_position >= m_cur_begin && m_position < m_cur_end) {
         uint64_t val =
             m_cur_base + m_partition_enum.move(m_position - m_cur_begin).second;
+        //std::cout<<"val: " << val << "|";
         return value_type(m_position, val);
       }
-
       return slow_move();
     }
 

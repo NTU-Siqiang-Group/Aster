@@ -14,8 +14,16 @@ extern "C" {
  * Method:    Reinitialize
  * Signature: (JI)J
  */
-JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_Reinitialize
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_Reinitialize__JI
   (JNIEnv *, jclass, jlong, jint);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    Reinitialize
+ * Signature: (JII)J
+ */
+JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_Reinitialize__JII
+  (JNIEnv *, jclass, jlong, jint, jint);
 
 /*
  * Class:     org_rocksdb_RocksGraph

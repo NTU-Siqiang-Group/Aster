@@ -4,7 +4,8 @@ namespace ROCKSDB_NAMESPACE {
 
 void inline MergeSortOutEdges(const Edges& existing_edges,
                               const Edges& new_edges, Edges& merged_edges,
-                              node_id_t vertex, bool is_partial = true,
+                              node_id_t vertex, node_id_t& m,
+                              bool is_partial = true,
                               MorrisCounter* mor = NULL) {
   std::vector<node_id_t> delete_edges;
   node_id_t pivot_ex = 0;
@@ -19,7 +20,8 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
       if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
         pivot_ex++;
         is_deleted = true;
-        mor->AddCounter(vertex);
+        mor->DecayCounter(vertex);
+        m--;
       }
     }
     if (is_deleted) continue;
@@ -45,7 +47,8 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
     if (existing_edges.nxts_out[pivot_ex].nxt ==
         new_edges.nxts_out[pivot_new].nxt) {
       pivot_ex++;
-      mor->AddCounter(vertex);
+      mor->DecayCounter(vertex);
+      m--;
     } else if (existing_edges.nxts_out[pivot_ex].nxt >
                new_edges.nxts_out[pivot_new].nxt) {
       merge_edges_list[edge_count++].nxt = new_edges.nxts_out[pivot_new++].nxt;
@@ -75,7 +78,7 @@ void inline MergeSortInEdges(const Edges& existing_edges,
       if (delete_edge == existing_edges.nxts_in[pivot_ex].nxt) {
         pivot_ex++;
         is_deleted = true;
-        mor->AddCounter(vertex);
+        mor->DecayCounter(vertex);
       }
     }
     if (is_deleted) continue;
@@ -95,7 +98,7 @@ void inline MergeSortInEdges(const Edges& existing_edges,
     if (existing_edges.nxts_in[pivot_ex].nxt ==
         new_edges.nxts_in[pivot_new].nxt) {
       pivot_ex++;
-      mor->AddCounter(vertex);
+      mor->DecayCounter(vertex);
     } else if (existing_edges.nxts_in[pivot_ex].nxt >
                new_edges.nxts_in[pivot_new].nxt) {
       merge_edges_list[edge_count++].nxt = new_edges.nxts_in[pivot_new++].nxt;
@@ -128,9 +131,9 @@ bool RocksGraph::AdjacentListMergeOp::Merge(const Slice& key,
   merged_edges.num_edges_in =
       existing_edges.num_edges_in + new_edges.num_edges_in;
   MergeSortOutEdges(existing_edges, new_edges, merged_edges,
-                    decode_node(key.data()), false, morris_out_delete_);
+                    decode_node(key.data()), *m_, false, morris_);
   MergeSortInEdges(existing_edges, new_edges, merged_edges,
-                   decode_node(key.data()), false, morris_in_delete_);
+                   decode_node(key.data()), false, morris_);
   free_edges(&existing_edges);
   free_edges(&new_edges);
   encode_edges(&merged_edges, new_value, encoding_type_);
@@ -160,9 +163,9 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
   merged_edges.num_edges_in =
       existing_edges.num_edges_in + new_edges.num_edges_in;
   MergeSortOutEdges(existing_edges, new_edges, merged_edges,
-                    decode_node(key.data()), true, morris_out_delete_);
+                    decode_node(key.data()), *m_, true, morris_);
   MergeSortInEdges(existing_edges, new_edges, merged_edges,
-                   decode_node(key.data()), true, morris_in_delete_);
+                   decode_node(key.data()), true, morris_);
   free_edges(&existing_edges);
   free_edges(&new_edges);
   encode_edges(&merged_edges, new_value, encoding_type_);
@@ -229,10 +232,13 @@ Status RocksGraph::AddVertex(node_id_t id) {
   VertexKey v{.id = id};
   std::string key, value;
   encode_node(v, &key);
-  Edges edges{.num_edges_out = 0};
+  Edges edges{.num_edges_out = 0, .num_edges_in = 0};
   edges.nxts_out = NULL;
+  edges.nxts_in = NULL;
   encode_edges(&edges, &value, encoding_type_);
   free_edges(&edges);
+  // if (edge_update_policy_ == EDGE_UPDATE_FULL_LAZY)
+  //   return db_->Merge(WriteOptions(), adj_cf_, key, value);
   return db_->Put(WriteOptions(), adj_cf_, key, value);
 }
 
@@ -254,13 +260,15 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   VertexKey v_out{.id = from};
   std::string key_out, value_out;
   encode_node(v_out, &key_out);
-
   int out_policy = edge_update_policy_;
+  if (out_policy == EDGE_UPDATE_FULL_LAZY) {
+    encode_node_hash(v_out, to, &key_out);
+  }
   if (out_policy == EDGE_UPDATE_ADAPTIVE) {
     out_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
-  if (out_policy == EDGE_UPDATE_LAZY) {
-    mor_out.AddCounter(from);
+  if (out_policy == EDGE_UPDATE_LAZY || out_policy == EDGE_UPDATE_FULL_LAZY) {
+    mor.AddCounter(from);
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
     edges.nxts_out[0] = Edge{.nxt = to};
@@ -289,7 +297,8 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     if (is_merge)
       new_edges.num_edges_out--;
     else
-      mor_out.AddCounter(from);
+      mor.AddCounter(from);
+    if (is_merge) m--;
     std::string new_value;
     encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
@@ -304,11 +313,14 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   std::string key_in, value_in;
   encode_node(v_in, &key_in);
   int in_policy = edge_update_policy_;
+  if(in_policy == EDGE_UPDATE_FULL_LAZY){
+    encode_node_hash(v_in, from, &key_in);
+  }
   if (in_policy == EDGE_UPDATE_ADAPTIVE) {
     in_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
-  if (in_policy == EDGE_UPDATE_LAZY) {
-    mor_in.AddCounter(to);
+  if (in_policy == EDGE_UPDATE_LAZY || out_policy == EDGE_UPDATE_FULL_LAZY) {
+    mor.AddCounter(to);
     Edges edges{.num_edges_out = 0, .num_edges_in = 1};
     edges.nxts_in = new Edge[1];
     edges.nxts_in[0] = Edge{.nxt = from};
@@ -330,12 +342,13 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
     memcpy(new_edges.nxts_out, existing_edges.nxts_out,
            existing_edges.num_edges_out * sizeof(Edge));
-    bool is_merge = InsertToEdgeList(new_edges.nxts_in, existing_edges.nxts_in,
+    bool is_merge = InsertToEdgeList(new_edges.nxts_in,
+    existing_edges.nxts_in,
                                      existing_edges.num_edges_in, from);
     if (is_merge)
       new_edges.num_edges_in--;
     else
-      mor_in.AddCounter(to);
+      mor.AddCounter(to);
     std::string new_value;
     encode_edges(&new_edges, &new_value, encoding_type_);
     free_edges(&existing_edges);
@@ -350,7 +363,6 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
 
 Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   Status s;
-  m--;
   VertexKey v{.id = from};
   std::string key_out, value_out;
   encode_node(v, &key_out);
@@ -386,7 +398,8 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     uint32_t edge_count = 0;
     while (pivot_ex < existing_edges.num_edges_out) {
       if (existing_edges.nxts_out[pivot_ex].nxt == to) {
-        mor_out_delete.AddCounter(from);
+        mor.DecayCounter(from);
+        m--;
         pivot_ex++;
       } else {
         new_edges.nxts_out[edge_count++].nxt =
@@ -439,7 +452,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     uint32_t edge_count = 0;
     while (pivot_ex < existing_edges.num_edges_in) {
       if (existing_edges.nxts_in[pivot_ex].nxt == from) {
-        mor_in_delete.AddCounter(to);
+        mor.DecayCounter(to);
         pivot_ex++;
       } else {
         new_edges.nxts_in[edge_count++].nxt =
@@ -464,10 +477,32 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
   std::string key;
   encode_node(v, &key);
   std::string value;
+  if (edge_update_policy_ == EDGE_UPDATE_FULL_LAZY) {
+    std::string start;
+    std::string end;
+    encode_node(v, &start);
+    start.push_back(static_cast<char>(0x00));
+    encode_node(v, &end);
+    end.push_back(static_cast<char>(0xFF));
+    Slice lower_key((char*)start.c_str());
+    Slice upper_key((char*)end.c_str());
+
+    rocksdb::ReadOptions read_options;
+    read_options.iterate_lower_bound = &lower_key;
+    read_options.iterate_upper_bound = &upper_key;
+
+    std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options));
+    for (it->Seek(start); it->Valid(); it->Next()) {
+      decode_edges(edges, value, encoding_type_);
+    }
+    return Status::OK();
+  }
   Status s = db_->Get(ReadOptions(), adj_cf_, key, &value);
   if (!s.ok()) {
     return s;
   }
+  decode_edges(edges, value, encoding_type_);
+  return Status::OK();
   // if(edge_update_policy_ != EDGE_UPDATE_EAGER){
   // GetMergeOperandsOptions merge_operands_info;
   // int number_of_operands = 0;
@@ -478,9 +513,6 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
   //                           values.data(), &merge_operands_info,
   //                           &number_of_operands);
   // }
-
-  decode_edges(edges, value, encoding_type_);
-  return Status::OK();
 }
 
 node_id_t RocksGraph::GetOutDegree(node_id_t src) {
@@ -491,7 +523,9 @@ node_id_t RocksGraph::GetOutDegree(node_id_t src) {
   db_->Get(ReadOptions(), adj_cf_, key, &value);
   Edges edges;
   decode_edges(&edges, value, encoding_type_);
-  return edges.num_edges_out;
+  node_id_t result = edges.num_edges_out;
+  free_edges(&edges);
+  return result;
 }
 
 node_id_t RocksGraph::GetInDegree(node_id_t src) {
@@ -502,11 +536,13 @@ node_id_t RocksGraph::GetInDegree(node_id_t src) {
   db_->Get(ReadOptions(), adj_cf_, key, &value);
   Edges edges;
   decode_edges(&edges, value, encoding_type_);
-  return edges.num_edges_in;
+  node_id_t result = edges.num_edges_in;
+  free_edges(&edges);
+  return result;
 }
 
-node_id_t RocksGraph::GetOutDegreeApproximate(node_id_t src,
-                                              int filter_type_manual) {
+node_id_t RocksGraph::GetDegreeApproximate(node_id_t src,
+                                           int filter_type_manual) {
   if (filter_type_manual > 0 && filter_type_ != FILTER_TYPE_ALL) {
     printf(
         "degree filter setting error: filter_type_manual > 0 should only be "
@@ -514,30 +550,49 @@ node_id_t RocksGraph::GetOutDegreeApproximate(node_id_t src,
   }
   if (filter_type_manual == FILTER_TYPE_CMS ||
       (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_CMS)) {
-    return cms_out.GetVertexCount(src);
+    return cms_out.GetVertexCount(src) + cms_in.GetVertexCount(src);
   } else if (filter_type_manual == FILTER_TYPE_MORRIS ||
              (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_MORRIS)) {
-    return mor_out.GetVertexCount(src) - mor_out_delete.GetVertexCount(src);
+    return mor.GetVertexCount(src);
   }
   return 0;
 }
 
-node_id_t RocksGraph::GetInDegreeApproximate(node_id_t src,
-                                             int filter_type_manual) {
-  if (filter_type_manual > 0 && filter_type_ != FILTER_TYPE_ALL) {
-    printf(
-        "degree filter setting error: filter_type_manual > 0 should only be "
-        "set when FILTER_TYPE_ALL\n");
-  }
-  if (filter_type_manual == FILTER_TYPE_CMS ||
-      (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_CMS)) {
-    return cms_in.GetVertexCount(src);
-  } else if (filter_type_manual == FILTER_TYPE_MORRIS ||
-             (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_MORRIS)) {
-    return mor_in.GetVertexCount(src) - mor_in_delete.GetVertexCount(src);
-  }
-  return 0;
-}
+// node_id_t RocksGraph::GetOutDegreeApproximate(node_id_t src,
+//                                               int filter_type_manual) {
+//   if (filter_type_manual > 0 && filter_type_ != FILTER_TYPE_ALL) {
+//     printf(
+//         "degree filter setting error: filter_type_manual > 0 should only be "
+//         "set when FILTER_TYPE_ALL\n");
+//   }
+//   if (filter_type_manual == FILTER_TYPE_CMS ||
+//       (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_CMS)) {
+//     return cms_out.GetVertexCount(src);
+//   } else if (filter_type_manual == FILTER_TYPE_MORRIS ||
+//              (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_MORRIS))
+//              {
+//     return mor_out.GetVertexCount(src) - mor_out_delete.GetVertexCount(src);
+//   }
+//   return 0;
+// }
+
+// node_id_t RocksGraph::GetInDegreeApproximate(node_id_t src,
+//                                              int filter_type_manual) {
+//   if (filter_type_manual > 0 && filter_type_ != FILTER_TYPE_ALL) {
+//     printf(
+//         "degree filter setting error: filter_type_manual > 0 should only be "
+//         "set when FILTER_TYPE_ALL\n");
+//   }
+//   if (filter_type_manual == FILTER_TYPE_CMS ||
+//       (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_CMS)) {
+//     return cms_in.GetVertexCount(src);
+//   } else if (filter_type_manual == FILTER_TYPE_MORRIS ||
+//              (filter_type_manual == 0 && filter_type_ == FILTER_TYPE_MORRIS))
+//              {
+//     return mor_in.GetVertexCount(src) - mor_in_delete.GetVertexCount(src);
+//   }
+//   return 0;
+// }
 
 // Status RocksGraph::GetVertexVal(node_id_t id, Value* val) {
 //   VertexKey v{.id = id, .type = KEY_TYPE_VERTEX_VAL};

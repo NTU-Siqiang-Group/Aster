@@ -94,6 +94,9 @@ public class RocksGraph extends RocksObject {
   private static native long Reinitialize(final long optionsHandle, final int policy)
       throws RocksDBException;
 
+  private static native long Reinitialize(final long optionsHandle, final int policy, final int encoding)
+      throws RocksDBException;
+
   private native void AddVertex(final long handle,
       final long id) throws RocksDBException;
 

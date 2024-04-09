@@ -104,7 +104,7 @@ class MorrisCounter {
   int mantissa_bits = 5;
   std::random_device rd;
   boost::mt19937 rand_gen;
-  
+
   MorrisCounter(vertex_id_t n) : rand_gen(rd()) { counters.resize(n, 0); }
 
   MorrisCounter() : rand_gen(rd()) { counters.resize(1); }
@@ -116,10 +116,20 @@ class MorrisCounter {
       vertex_id_t new_size = counters.size() * 2;
       counters.resize(new_size, 0);
     }
+    if(counters[v] == UCHAR_MAX) return;
     int exponent = ExtractExponent(counters[v]);
     std::uniform_int_distribution<> dist(1, pow(2, exponent));
     if (dist(rand_gen) == 1) {
       counters[v]++;
+    }
+  }
+
+  void DecayCounter(vertex_id_t v) {
+    if(static_cast<size_t>(v) > counters.size()) return;
+    int exponent = ExtractExponent(counters[v]);
+    std::uniform_int_distribution<> dist(1, pow(2, exponent));
+    if (dist(rand_gen) == 1 && counters[v]!= 0) {
+      counters[v]--;
     }
   }
 
@@ -139,6 +149,7 @@ class MorrisCounter {
     if (static_cast<size_t>(v) > counters.size()) {
       return 0;
     }
+    if(counters[v] == UCHAR_MAX) return INT_MAX;
     int exponent = ExtractExponent(counters[v]);
     int mantissa = ExtractMantissa(counters[v]);
     return (pow(2, exponent) - 1) * pow(2, mantissa_bits) +
