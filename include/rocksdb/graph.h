@@ -310,7 +310,7 @@ class RocksGraph {
   }
 
   ~RocksGraph() {
-    GraphMeta meta{.m = m, .n = n};
+    GraphMeta meta{.n = n, .m = m};
     WriteMeta(db_path + meta_filename, meta);
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(val_cf_);
