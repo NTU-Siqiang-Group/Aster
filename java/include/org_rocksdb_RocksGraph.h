@@ -131,6 +131,14 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_Terminate
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    SetWorkload
+ * Signature: (JD)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetWorkload
+  (JNIEnv *, jobject, jlong, jdouble);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    disposeInternal
  * Signature: (J)V
  */

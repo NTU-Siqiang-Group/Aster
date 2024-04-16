@@ -91,6 +91,10 @@ public class RocksGraph extends RocksObject {
     return CountEdge(nativeHandle_);
   }
 
+  public void SetWorkload(final double lookup_ratio) throws RocksDBException {
+    SetWorkload(nativeHandle_, lookup_ratio);
+  }
+
   private static native long Reinitialize(final long optionsHandle, final int policy)
       throws RocksDBException;
 
@@ -125,6 +129,8 @@ public class RocksGraph extends RocksObject {
   private native int OutDegreeFast(final long handle, final long id) throws RocksDBException;
 
   private static native void Terminate(final long handle) throws RocksDBException;
+
+  private native void SetWorkload(final long handle, final double lookup_ratio) throws RocksDBException;
 
   @Override
   protected native void disposeInternal(final long handle);

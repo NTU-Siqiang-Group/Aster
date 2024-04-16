@@ -55,8 +55,8 @@ jlong Java_org_rocksdb_RocksGraph_Reinitialize__JI(JNIEnv*, jclass,
 JNIEXPORT jlong JNICALL Java_org_rocksdb_RocksGraph_Reinitialize__JII(
     JNIEnv*, jclass, jlong jopt_handle, jint update_policy, jint encoding) {
   auto* opt = reinterpret_cast<ROCKSDB_NAMESPACE::Options*>(jopt_handle);
-  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
-      new ROCKSDB_NAMESPACE::RocksGraph(*opt, static_cast<int>(update_policy), static_cast<int>(encoding));
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db = new ROCKSDB_NAMESPACE::RocksGraph(
+      *opt, static_cast<int>(update_policy), static_cast<int>(encoding));
   return GET_CPLUSPLUS_POINTER(graph_db);
 }
 
@@ -286,6 +286,14 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_Terminate(JNIEnv, jclass,
   graph_db->~RocksGraph();
 }
 
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetWorkload(
+    JNIEnv*, jobject, jlong jdb_handle, jdouble jlookup_ratio) {
+  double lookup_ratio = static_cast<double>(jlookup_ratio);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  graph_db->SetRatio(1 - lookup_ratio, lookup_ratio);
+}
+
 /*
  * Class:     org_rocksdb_RocksGraph
  * Method:    disposeInternal
@@ -295,5 +303,5 @@ JNIEXPORT void JNICALL
 Java_org_rocksdb_RocksGraph_disposeInternal(JNIEnv, jobject, jlong jdb_handle) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-  graph_db->~RocksGraph();
+      graph_db->~RocksGraph();
 }
