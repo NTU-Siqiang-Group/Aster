@@ -279,7 +279,7 @@ JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_OutDegree(JNIEnv*, jobject,
  * Method:    Terminate
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_Terminate(JNIEnv, jclass,
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_Terminate(JNIEnv*, jclass,
                                                              jlong jdb_handle) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
@@ -300,7 +300,7 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetWorkload(
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL
-Java_org_rocksdb_RocksGraph_disposeInternal(JNIEnv, jobject, jlong jdb_handle) {
+Java_org_rocksdb_RocksGraph_disposeInternal(JNIEnv*, jobject, jlong jdb_handle) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
       graph_db->~RocksGraph();
