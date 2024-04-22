@@ -296,12 +296,25 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetWorkload(
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    SetCacheMissRate
+ * Signature: (JD)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetCacheMissRate(
+    JNIEnv*, jobject, jlong jdb_handle, jdouble cache_miss_rate) {
+  double rate = static_cast<double>(cache_miss_rate);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  graph_db->SetRate(rate);
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    disposeInternal
  * Signature: (J)V
  */
-JNIEXPORT void JNICALL
-Java_org_rocksdb_RocksGraph_disposeInternal(JNIEnv*, jobject, jlong jdb_handle) {
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_disposeInternal(
+    JNIEnv*, jobject, jlong jdb_handle) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-      graph_db->~RocksGraph();
+  graph_db->~RocksGraph();
 }

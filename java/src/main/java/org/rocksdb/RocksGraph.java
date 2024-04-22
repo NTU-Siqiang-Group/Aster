@@ -132,6 +132,8 @@ public class RocksGraph extends RocksObject {
 
   private native void SetWorkload(final long handle, final double lookup_ratio) throws RocksDBException;
 
+  private native void SetCacheMissRate(final long handle, final double cache_miss_rate) throws RocksDBException;
+
   @Override
   protected native void disposeInternal(final long handle);
 }

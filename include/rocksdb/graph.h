@@ -241,6 +241,7 @@ class RocksGraph {
   bool auto_reinitialize_ = false;
   double update_ratio_ = 0.5;
   double lookup_ratio_ = 0.5;
+  double cache_miss_rate_ = 0.9;
   std::string db_path = "/tmp/demo";
   std::string meta_filename = "/GraphMeta.log";
 
@@ -400,6 +401,10 @@ class RocksGraph {
     lookup_ratio_ = lookup_ratio;
   }
 
+  void SetRate(double cache_miss_rate){
+    cache_miss_rate_ = cache_miss_rate;
+  }
+
   int AdaptPolicy(node_id_t src, double update_ratio, double lookup_ratio) {
     if(level_num_update_countdown == 0){
       level_num_update_countdown = 10000;
@@ -414,13 +419,12 @@ class RocksGraph {
     node_id_t degree =
         GetDegreeApproximate(src);
     double WA = db_->GetOptions().max_bytes_for_level_multiplier * level_num;
-    double cache_miss_rate = 0.9;
     double left =
-        cache_miss_rate * (1 + (double)(vertex_space + edge_space * degree) /
+        cache_miss_rate_ * (1 + (double)(vertex_space + edge_space * degree) /
                                    (double)block_size) +
         (double)(edge_space * (degree - 1)) * WA / (double)(block_size);
     double right =
-        cache_miss_rate * ((double)m / (double)n) *
+        cache_miss_rate_ * ((double)m / (double)n) *
         (lookup_ratio /
          double(db_->GetOptions().max_bytes_for_level_multiplier - 1) /
          update_ratio);

@@ -139,6 +139,14 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetWorkload
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    SetCacheMissRate
+ * Signature: (JD)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_SetCacheMissRate
+  (JNIEnv *, jobject, jlong, jdouble);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    disposeInternal
  * Signature: (J)V
  */
