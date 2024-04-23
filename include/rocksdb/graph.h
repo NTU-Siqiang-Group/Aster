@@ -420,7 +420,7 @@ class RocksGraph {
         GetDegreeApproximate(src);
     double WA = db_->GetOptions().max_bytes_for_level_multiplier * level_num;
     double left =
-        cache_miss_rate_ * (1 + (double)(vertex_space + edge_space * degree) /
+        (2 + (double)(vertex_space + edge_space * degree) /
                                    (double)block_size) +
         (double)(edge_space * (degree - 1)) * WA / (double)(block_size);
     double right =
