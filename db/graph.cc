@@ -481,9 +481,15 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
     std::string start;
     std::string end;
     encode_node(v, &start);
-    start.push_back(static_cast<char>(0x00));
+    //start.push_back(static_cast<char>(0x00));
     encode_node(v, &end);
-    end.push_back(static_cast<char>(0xFF));
+    std::string::iterator sit=end.begin();
+    for( ; *(sit+1)!=0; ++sit){}
+    *sit = *sit + 1;
+
+    //end.push_back(static_cast<char>(0xFF));
+    // std::cout<<"start: "<< start << std::endl;
+    // std::cout<<"end: "<< end << std::endl;
     Slice lower_key((char*)start.c_str());
     Slice upper_key((char*)end.c_str());
 
@@ -492,9 +498,12 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
     read_options.iterate_upper_bound = &upper_key;
 
     std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options));
+    int edge_count = 0;
     for (it->Seek(start); it->Valid(); it->Next()) {
+      edge_count++;
       decode_edges(edges, value, encoding_type_);
     }
+    // printf("edge_count: %d\t", edge_count);
     return Status::OK();
   }
   Status s = db_->Get(ReadOptions(), adj_cf_, key, &value);

@@ -60,8 +60,8 @@ int main(int argc, char* argv[]) {
   rocksdb::GraphBenchmarkTool tool(options, FLAGS_is_directed, edge_update_policy, encoding_type, reinit);
   // int load_n = 400000;
   // int load_m = 10000000;
-  int load_n = 100000;
-  int load_m = 1000000;
+  int load_n = 20000;
+  int load_m = 200000;
   double update_ratio = 0.5;
   tool.SetRatio(update_ratio, 1 - update_ratio);
   // tool.TradeOffTest(load_n, &options);
@@ -91,16 +91,16 @@ int main(int argc, char* argv[]) {
             << std::endl;
 
 
-  std::string stat;
-  tool.GetRocksGraphStats(stat);
-  std::cout << stat << std::endl;
-  std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+  // std::string stat;
+  // tool.GetRocksGraphStats(stat);
+  // std::cout << stat << std::endl;
+  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
 
-  tool.RunBenchmark(load_n, update_ratio, load_n);
+  // tool.RunBenchmark(load_n, update_ratio, load_n);
 
-  tool.GetRocksGraphStats(stat);
-  std::cout << stat << std::endl;
-  std::cout << "statistics: " << options.statistics->ToString() << std::endl;
+  // tool.GetRocksGraphStats(stat);
+  // std::cout << stat << std::endl;
+  // std::cout << "statistics: " << options.statistics->ToString() << std::endl;
 
-  tool.printLSM();
+  // tool.printLSM();
 }

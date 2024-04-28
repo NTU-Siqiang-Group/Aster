@@ -90,7 +90,10 @@ void inline encode_node_hash(VertexKey v, node_id_t edge, std::string* key) {
   for (int i = byte_to_fill - 1; i >= 0; i--) {
     key->push_back((v.id >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
   }
+  // std::cout << "v: " << v.id << std::endl;
+  // std::cout << "key: " << key << std::endl;
   key->push_back(static_cast<char>(edge & 0xFF));
+  // std::cout << "key: " << key << std::endl;
 }
 
 void inline decode_node(VertexKey* v, const std::string& key) {

@@ -202,7 +202,7 @@ class GraphBenchmarkTool {
   }
 
   void LoadPowerLawGraph(node_id_t n, double alpha, int min_degree = 4,
-                         int max_degree = 1024) {
+                         int max_degree = 1024, int density = 1) {
     std::random_device rd;
     std::mt19937 gen(rd());
     int m_edge_count = 0;
@@ -212,7 +212,7 @@ class GraphBenchmarkTool {
       if (i % (n / 20) == 0) {
         std::cout << (i * 100) / (double)n << "\t%" << std::endl;
       }
-      int degree = generatePowerLawDegree(alpha, min_degree, max_degree, gen);
+      int degree = generatePowerLawDegree(alpha, min_degree, max_degree, gen) * density;
       // printf("degree:%d\n", degree);
       m_edge_count += degree;
       for (int j = 0; j < degree; j++) {
@@ -232,7 +232,7 @@ class GraphBenchmarkTool {
   }
 
   void LoadPowerLawGraphNew(node_id_t n, double alpha, int min_degree = 4,
-                            int max_degree = 1024) {
+                            int max_degree = 1024, int density = 1) {
     std::random_device rd;
     std::mt19937 gen(rd());
     int m_edge_count = 0;
@@ -242,7 +242,7 @@ class GraphBenchmarkTool {
     node_id_t from, to;
     for (int i = 0; i < n; i++) {
       degree_array[i] =
-          generatePowerLawDegree(alpha, min_degree, max_degree, gen);
+          generatePowerLawDegree(alpha, min_degree, max_degree, gen) * density;
     }
     for (int t = max_degree; t > 0; t--) {
       if (t % (max_degree / 20) == 0) {
