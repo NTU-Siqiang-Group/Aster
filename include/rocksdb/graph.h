@@ -326,6 +326,9 @@ class RocksGraph {
   node_id_t CountEdge();
   Status AddVertex(node_id_t id);
   Status AddEdge(node_id_t from, node_id_t to);
+  void AddVertexForBulkLoad() { n++; }
+  std::pair<std::string, std::string> AddEdges(node_id_t from, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms);
+  DB* get_raw_db() { return db_; }
   Status DeleteEdge(node_id_t from, node_id_t to);
   Status GetAllEdges(node_id_t src, Edges* edges);
   node_id_t GetOutDegree(node_id_t id);

@@ -95,6 +95,10 @@ public class RocksGraph extends RocksObject {
     SetWorkload(nativeHandle_, lookup_ratio);
   }
 
+  public void SetCacheMissRate(final double cache_miss_rate) throws RocksDBException {
+    SetCacheMissRate(nativeHandle_, cache_miss_rate);
+  }
+
   private static native long Reinitialize(final long optionsHandle, final int policy)
       throws RocksDBException;
 

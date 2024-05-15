@@ -361,6 +361,28 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   return s;
 }
 
+std::pair<std::string, std::string> RocksGraph::AddEdges(node_id_t v, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms) {
+  m += tos.size();
+  Edges new_edges{.num_edges_out = tos.size(), .num_edges_in = froms.size()};
+  VertexKey v_out{.id = v};
+  new_edges.nxts_out = new Edge[new_edges.num_edges_out];
+  new_edges.nxts_in = new Edge[new_edges.num_edges_in];
+  for (size_t i = 0; i < tos.size(); i++) {
+    new_edges.nxts_out[i].nxt = tos[i];
+    mor.AddCounter(v);
+  }
+  for (size_t i =  0; i < froms.size(); i++) {
+    new_edges.nxts_in[i].nxt = froms[i];
+    mor.AddCounter(v);
+  }
+  std::string new_value;
+  std::string key_out;
+  encode_node(v_out, &key_out);
+  encode_edges(&new_edges, &new_value, encoding_type_);
+  free_edges(&new_edges);
+  return std::make_pair(key_out, new_value);
+}
+
 Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   Status s;
   VertexKey v{.id = from};
@@ -501,7 +523,8 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
     int edge_count = 0;
     for (it->Seek(start); it->Valid(); it->Next()) {
       edge_count++;
-      decode_edges(edges, value, encoding_type_);
+      it->value();
+      // decode_edges(edges,  it->value().ToString(), encoding_type_);
     }
     // printf("edge_count: %d\t", edge_count);
     return Status::OK();
