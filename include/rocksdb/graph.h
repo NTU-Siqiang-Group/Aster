@@ -23,7 +23,7 @@ using edge_id_t = int64_t;
 #define EDGE_UPDATE_FULL_LAZY 0x3
 
 #define KEY_TYPE_ADJENCENT_LIST 0x0
-#define KEY_TYPE_VERTEX_VAL 0x1
+#define KEY_TYPE_PROPERTY 0x1
 
 #define ENCODING_TYPE_NONE 0x0
 #define ENCODING_TYPE_EFP 0x1
@@ -67,6 +67,11 @@ struct VertexKey {
   // int type;
 };
 
+struct Property {
+  std::string name;
+  std::string value;
+};
+
 // void decode_node(VertexKey* v, const std::string& key);
 // void decode_edges(Edges* edges, const std::string& value);
 // void encode_node(VertexKey v, std::string* key);
@@ -83,6 +88,13 @@ void inline encode_node(VertexKey v, std::string* key) {
   // for (int i = byte_to_fill - 1; i >= 0; i--) {
   //   key->push_back((v.type >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
   // }
+}
+
+void inline encode_node(node_id_t v, std::string* key) {
+  int byte_to_fill = sizeof(v);
+  for (int i = byte_to_fill - 1; i >= 0; i--) {
+    key->push_back((v >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+  }
 }
 
 void inline encode_node_hash(VertexKey v, node_id_t edge, std::string* key) {
@@ -121,8 +133,7 @@ void inline encode_edge(const Edge* edge, std::string* value) {
 }
 
 void inline encode_edges(
-    const Edges* edges, std::string* value,
-    int encoding_type,
+    const Edges* edges, std::string* value, int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   // copy the number of edges
   // value->append(reinterpret_cast<const char*>(edges), sizeof(int) +
@@ -175,8 +186,7 @@ void inline encode_edges(
 }
 
 void inline decode_edges(
-    Edges* edges, const std::string& value,
-    int encoding_type,
+    Edges* edges, const std::string& value, int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
@@ -230,6 +240,107 @@ void inline free_edges(Edges* edges) {
   delete[] edges->nxts_in;
 }
 
+void inline concatenate_properties(const std::vector<Property>& props,
+                                   std::string* value) {
+  for (const auto& prop : props) {
+    *value += prop.name + '\0';
+    *value += prop.value + '\0';
+  }
+  value += '\0';
+}
+
+void inline concatenate_property(const Property& prop, std::string* value) {
+  std::string concatenated;
+  *value += prop.name + '\0';
+  *value += prop.value + '\0';
+  value += '\0';
+}
+
+void inline merge_properties(const std::vector<Property>& existing_props,
+                             const std::vector<Property>& new_props,
+                             std::vector<Property>& merged_props) {
+  size_t existing_index = 0;
+  size_t new_index = 0;
+  while(existing_index < existing_props.size() || new_index<new_props.size()){
+    if(existing_index >= existing_props.size()){
+      merged_props.push_back(new_props[new_index]);
+      new_index++;
+      continue;
+    }
+    if(new_index >= new_props.size()){
+      merged_props.push_back(existing_props[existing_index]);
+      existing_index++;
+      continue;
+    }
+    if(existing_props[existing_index].name == new_props[new_index].name){
+      merged_props.push_back(new_props[new_index]);
+      new_index++;
+      existing_index++;
+    }else if(existing_props[existing_index].name > new_props[new_index].name){
+      merged_props.push_back(new_props[new_index]);
+      new_index++;
+    }else if(existing_props[existing_index].name < new_props[new_index].name){
+      merged_props.push_back(existing_props[existing_index]);
+      existing_index++;
+    }
+  }
+}
+
+void inline decode_properties(std::string::iterator& it,
+                              std::vector<Property>& props) {
+  while (*it != '\0') {
+    Property prop;
+    while (*it != '\0') {
+      prop.name += *it;
+      it++;
+    }
+    it++;
+    while (*it != '\0') {
+      prop.value += *it;
+      it++;
+    }
+    it++;
+    props.push_back(prop);
+  }
+  it++;
+}
+
+void inline skip_properties(std::string::iterator& it) {
+  int terminate_counter = 0;
+  while (1) {
+    if (*it == '\0') {
+      terminate_counter++;
+    } else {
+      terminate_counter = 0;
+    }
+    *it++;
+    if (terminate_counter >= 2) {
+      break;
+    }
+  }
+}
+
+node_id_t inline decode_id(std::string::iterator& it) {
+  node_id_t id;
+  std::memcpy(&id, &(*it), sizeof(node_id_t));
+  std::advance(it, sizeof(node_id_t));
+  return id;
+}
+
+std::vector<std::string> inline split_strings(const std::string& concatenated) {
+  std::vector<std::string> strings;
+  std::string current;
+  for (char ch : concatenated) {
+    if (ch == '\0') {
+      strings.push_back(current);
+      current.clear();
+    } else {
+      current += ch;
+    }
+  }
+  return strings;
+}
+
 struct GraphMeta {
   node_id_t n = 0;
   node_id_t m = 0;
@@ -253,10 +364,8 @@ class RocksGraph {
     int encoding_type_;
     MorrisCounter* morris_;
     node_id_t* m_;
-    AdjacentListMergeOp(int encoding_type, MorrisCounter* morris, node_id_t &m)
-        : encoding_type_(encoding_type),
-          morris_(morris),
-          m_(&m) {}
+    AdjacentListMergeOp(int encoding_type, MorrisCounter* morris, node_id_t& m)
+        : encoding_type_(encoding_type), morris_(morris), m_(&m) {}
     virtual ~AdjacentListMergeOp() override{};
     virtual bool Merge(const Slice& key, const Slice* existing_value,
                        const Slice& value, std::string* new_value,
@@ -266,6 +375,22 @@ class RocksGraph {
                               Logger* logger) const override;
     virtual const char* Name() const override { return "AdjacentListMergeOp"; }
   };
+
+  class PropertyMergeOp : public AssociativeMergeOperator {
+   public:
+    int encoding_type_;
+    PropertyMergeOp(int encoding_type)
+        : encoding_type_(encoding_type) {}
+    virtual ~PropertyMergeOp() override{};
+    virtual bool Merge(const Slice& key, const Slice* existing_value,
+                       const Slice& value, std::string* new_value,
+                       Logger* logger) const override;
+    virtual bool PartialMerge(const Slice& key, const Slice& existing_value,
+                              const Slice& value, std::string* new_value,
+                              Logger* logger) const override;
+    virtual const char* Name() const override { return "PropertyMergeOp"; }
+  };
+
   RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE,
              int encoding_type = ENCODING_TYPE_NONE,
              bool auto_reinitialize = false)
@@ -276,14 +401,11 @@ class RocksGraph {
         auto_reinitialize_(auto_reinitialize),
         cms_out(),
         cms_in(),
-        mor(){
-    if (edge_update_policy != EDGE_UPDATE_EAGER) {
-      options.merge_operator.reset(new AdjacentListMergeOp(
-          encoding_type_, &mor, m));
-    }
+        mor() {
     auto table_options =
         options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
-    table_options->filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+    table_options->filter_policy.reset(
+        rocksdb::NewBloomFilterPolicy(10, false));
     options.level_compaction_dynamic_level_bytes = false;
     if (filter_type_ == FILTER_TYPE_CMS || filter_type_ == FILTER_TYPE_ALL) {
       cms_out = CountMinSketch(cms_delta, cms_epsilon);
@@ -293,8 +415,16 @@ class RocksGraph {
     // }
     options.create_missing_column_families = true;
     std::vector<ColumnFamilyDescriptor> column_families;
+    if (edge_update_policy != EDGE_UPDATE_EAGER) {
+      options.merge_operator.reset(
+          new AdjacentListMergeOp(encoding_type_, &mor, m));
+    }
     column_families.emplace_back(kDefaultColumnFamilyName, options);
-    column_families.emplace_back("vertex_val", options);
+    // switch to merge operator for properties
+    options.merge_operator.reset(new PropertyMergeOp(encoding_type_));
+    column_families.emplace_back("eprop_val", options);
+    options.merge_operator = nullptr;
+    column_families.emplace_back("vprop_val", options);
     std::vector<ColumnFamilyHandle*> handles;
     if (auto_reinitialize_) {
       DestroyDB(db_path, options);
@@ -310,14 +440,15 @@ class RocksGraph {
       exit(1);
     }
     adj_cf_ = handles[0];
-    val_cf_ = handles[1];
+    edge_prop_cf_ = handles[1];
+    vertex_prop_cf_ = handles[2];
   }
 
   ~RocksGraph() {
     GraphMeta meta{.n = n, .m = m};
     WriteMeta(db_path + meta_filename, meta);
     db_->DestroyColumnFamilyHandle(adj_cf_);
-    db_->DestroyColumnFamilyHandle(val_cf_);
+    db_->DestroyColumnFamilyHandle(edge_prop_cf_);
     db_->SyncWAL();
     db_->Close();
     // delete db_;
@@ -326,15 +457,24 @@ class RocksGraph {
   node_id_t CountEdge();
   Status AddVertex(node_id_t id);
   Status AddEdge(node_id_t from, node_id_t to);
+  Status AddVertexProperty(node_id_t id, Property prop);
+  Status AddEdgeProperty(node_id_t from, node_id_t to, Property prop);
   void AddVertexForBulkLoad() { n++; }
-  std::pair<std::string, std::string> AddEdges(node_id_t from, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms);
+  std::pair<std::string, std::string> AddEdges(node_id_t from,
+                                               std::vector<node_id_t>& tos,
+                                               std::vector<node_id_t>& froms);
   DB* get_raw_db() { return db_; }
   Status DeleteEdge(node_id_t from, node_id_t to);
   Status GetAllEdges(node_id_t src, Edges* edges);
   node_id_t GetOutDegree(node_id_t id);
   node_id_t GetInDegree(node_id_t id);
   node_id_t GetDegreeApproximate(node_id_t id, int filter_type_manual = 0);
-  //node_id_t GetInDegreeApproximate(node_id_t id, int filter_type_manual = 0);
+  Status GetVertexProperty(node_id_t id, std::vector<Property>& props);
+  Status GetEdgeProperty(node_id_t from, node_id_t to,
+                         std::vector<Property>& props);
+  node_id_t GetVertexWithProperty(Property prop);
+  std::pair<node_id_t, node_id_t> GetEdgeWithProperty(Property prop);
+  // node_id_t GetInDegreeApproximate(node_id_t id, int filter_type_manual = 0);
   Status SimpleWalk(node_id_t start, float decay_factor = 0.20);
   void GetRocksDBStats(std::string& stat) {
     db_->GetProperty("rocksdb.stats", &stat);
@@ -407,12 +547,10 @@ class RocksGraph {
     lookup_ratio_ = lookup_ratio;
   }
 
-  void SetRate(double cache_miss_rate){
-    cache_miss_rate_ = cache_miss_rate;
-  }
+  void SetRate(double cache_miss_rate) { cache_miss_rate_ = cache_miss_rate; }
 
   int AdaptPolicy(node_id_t src, double update_ratio, double lookup_ratio) {
-    if(level_num_update_countdown == 0){
+    if (level_num_update_countdown == 0) {
       level_num_update_countdown = 10000;
       UpdateLevelNum();
     }
@@ -422,12 +560,11 @@ class RocksGraph {
     node_id_t edge_space = sizeof(edge_id_t);
     // node_id_t degree = is_out_edge ? GetOutDegreeApproximate(src)
     //                                : GetInDegreeApproximate(src);
-    node_id_t degree =
-        GetDegreeApproximate(src);
+    node_id_t degree = GetDegreeApproximate(src);
     double WA = db_->GetOptions().max_bytes_for_level_multiplier * level_num;
     double left =
-        (2 + (double)(vertex_space + edge_space * degree) /
-                                   (double)block_size) +
+        (2 +
+         (double)(vertex_space + edge_space * degree) / (double)block_size) +
         (double)(edge_space * (degree - 1)) * WA / (double)(block_size);
     double right =
         cache_miss_rate_ * ((double)m / (double)n) *
@@ -446,7 +583,7 @@ class RocksGraph {
     }
   }
 
-  void UpdateLevelNum(){
+  void UpdateLevelNum() {
     ColumnFamilyMetaData cf_meta;
     db_->GetColumnFamilyMetaData(adj_cf_, &cf_meta);
     for (auto level : cf_meta.levels) {
@@ -454,7 +591,7 @@ class RocksGraph {
         level_num = level.level;
       }
     }
-    //std::cout << "level_num: " << level_num << std::endl;
+    // std::cout << "level_num: " << level_num << std::endl;
   }
 
   // Status GetVertexVal(node_id_t id, Value* val);
@@ -500,7 +637,7 @@ class RocksGraph {
   node_id_t random_walk(node_id_t start, float decay_factor = 0.20);
   DB* db_;
   // bool is_lazy_;
-  ColumnFamilyHandle *val_cf_, *adj_cf_;
+  ColumnFamilyHandle *adj_cf_, *edge_prop_cf_, *vertex_prop_cf_;
   CountMinSketch cms_out;
   CountMinSketch cms_in;
   MorrisCounter mor;

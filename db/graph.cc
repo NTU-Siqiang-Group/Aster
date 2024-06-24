@@ -123,7 +123,6 @@ bool RocksGraph::AdjacentListMergeOp::Merge(const Slice& key,
     }
   }
   Edges new_edges, existing_edges, merged_edges;
-
   decode_edges(&new_edges, value.ToString(), encoding_type_);
   decode_edges(&existing_edges, existing_value->ToString(), encoding_type_);
   merged_edges.num_edges_out =
@@ -157,7 +156,6 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
   Edges new_edges, existing_edges, merged_edges;
   decode_edges(&new_edges, value.ToString(), encoding_type_);
   decode_edges(&existing_edges, existing_value.ToString(), encoding_type_);
-
   merged_edges.num_edges_out =
       existing_edges.num_edges_out + new_edges.num_edges_out;
   merged_edges.num_edges_in =
@@ -172,6 +170,103 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
   free_edges(&merged_edges);
   return true;
   logger->Flush();
+}
+
+void inline write_property(node_id_t& id, std::string* output,
+                           std::string::iterator& it, std::string& str) {
+  encode_node(id, output);
+  std::vector<Property> props;
+  decode_properties(it, props);
+  concatenate_properties(props, output);
+  if (it < str.end()) id = decode_id(it);
+}
+
+bool RocksGraph::PropertyMergeOp::Merge(const Slice& key,
+                                        const Slice* existing_value,
+                                        const Slice& value,
+                                        std::string* new_value,
+                                        Logger* logger) const {
+  std::string existing_str = existing_value->ToString();
+  std::string new_str = value.ToString();
+  std::string::iterator existing_it = existing_str.begin();
+  std::string::iterator new_it = new_str.begin();
+  node_id_t existing_id = decode_id(existing_it);
+  node_id_t new_id = decode_id(new_it);
+  while (existing_it < existing_str.end() || new_it < new_str.end()) {
+    if (existing_it >= existing_str.end()) {
+      write_property(new_id, new_value, new_it, new_str);
+      continue;
+    }
+    if (new_it >= new_str.end()) {
+      write_property(existing_id, new_value, existing_it, existing_str);
+      continue;
+    }
+    if (existing_id == new_id) {
+      encode_node(existing_id, new_value);
+      std::vector<Property> existing_props, new_props, merged_props;
+      decode_properties(existing_it, existing_props);
+      decode_properties(new_it, new_props);
+      merge_properties(existing_props, new_props, merged_props);
+      concatenate_properties(merged_props, new_value);
+      if (new_it < new_str.end()) {
+        new_id = decode_id(new_it);
+      }
+      if (existing_it < existing_str.end()) {
+        existing_id = decode_id(existing_it);
+      }
+    } else if (existing_id > new_id) {
+      write_property(new_id, new_value, new_it, new_str);
+    } else if (existing_id < new_id) {
+      write_property(existing_id, new_value, existing_it, existing_str);
+    }
+  }
+  return true;
+  if(key.size())
+    logger->Flush();
+}
+
+bool RocksGraph::PropertyMergeOp::PartialMerge(const Slice& key,
+                                               const Slice& existing_value,
+                                               const Slice& value,
+                                               std::string* new_value,
+                                               Logger* logger) const {
+  std::string existing_str = existing_value.ToString();
+  std::string new_str = value.ToString();
+  std::string::iterator existing_it = existing_str.begin();
+  std::string::iterator new_it = new_str.begin();
+  node_id_t existing_id = decode_id(existing_it);
+  node_id_t new_id = decode_id(new_it);
+  while (existing_it < existing_str.end() || new_it < new_str.end()) {
+    if (existing_it >= existing_str.end()) {
+      write_property(new_id, new_value, new_it, new_str);
+      continue;
+    }
+    if (new_it >= new_str.end()) {
+      write_property(existing_id, new_value, existing_it, existing_str);
+      continue;
+    }
+    if (existing_id == new_id) {
+      encode_node(existing_id, new_value);
+      std::vector<Property> existing_props, new_props, merged_props;
+      decode_properties(existing_it, existing_props);
+      decode_properties(new_it, new_props);
+      merge_properties(existing_props, new_props, merged_props);
+      concatenate_properties(merged_props, new_value);
+      if (new_it < new_str.end()) {
+        new_id = decode_id(new_it);
+      }
+      if (existing_it < existing_str.end()) {
+        existing_id = decode_id(existing_it);
+      }
+    } else if (existing_id > new_id) {
+      write_property(new_id, new_value, new_it, new_str);
+    } else if (existing_id < new_id) {
+      write_property(existing_id, new_value, existing_it, existing_str);
+    }
+  }
+  return true;
+  if(key.size())
+    logger->Flush();
 }
 
 bool inline InsertToEdgeList(Edge*& new_list, const Edge* cur_list,
@@ -313,7 +408,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   std::string key_in, value_in;
   encode_node(v_in, &key_in);
   int in_policy = edge_update_policy_;
-  if(in_policy == EDGE_UPDATE_FULL_LAZY){
+  if (in_policy == EDGE_UPDATE_FULL_LAZY) {
     encode_node_hash(v_in, from, &key_in);
   }
   if (in_policy == EDGE_UPDATE_ADAPTIVE) {
@@ -342,8 +437,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
     memcpy(new_edges.nxts_out, existing_edges.nxts_out,
            existing_edges.num_edges_out * sizeof(Edge));
-    bool is_merge = InsertToEdgeList(new_edges.nxts_in,
-    existing_edges.nxts_in,
+    bool is_merge = InsertToEdgeList(new_edges.nxts_in, existing_edges.nxts_in,
                                      existing_edges.num_edges_in, from);
     if (is_merge)
       new_edges.num_edges_in--;
@@ -361,9 +455,66 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   return s;
 }
 
-std::pair<std::string, std::string> RocksGraph::AddEdges(node_id_t v, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms) {
-  m += tos.size();
-  Edges new_edges{.num_edges_out = tos.size(), .num_edges_in = froms.size()};
+Status RocksGraph::AddVertexProperty(node_id_t id, Property prop) {
+  VertexKey v{.id = id};
+  std::string key, value;
+  encode_node(v, &key);
+  concatenate_property(prop, &value);
+  return db_->Put(WriteOptions(), vertex_prop_cf_, key, value);
+}
+
+Status RocksGraph::AddEdgeProperty(node_id_t from, node_id_t to,
+                                   Property prop) {
+  VertexKey v{.id = from};
+  std::string key, value;
+  encode_node(v, &key);
+  encode_node(to, &value);
+  concatenate_property(prop, &value);
+  return db_->Put(WriteOptions(), edge_prop_cf_, key, value);
+}
+
+Status RocksGraph::GetVertexProperty(node_id_t id,
+                                     std::vector<Property>& props) {
+  VertexKey v{.id = id};
+  std::string key;
+  encode_node(v, &key);
+  std::string value;
+  Status s = db_->Get(ReadOptions(), vertex_prop_cf_, key, &value);
+  if (!s.ok()) {
+    return s;
+  }
+  std::string::iterator it = value.begin();
+  decode_properties(it, props);
+  return Status::OK();
+}
+
+Status RocksGraph::GetEdgeProperty(node_id_t from, node_id_t to,
+                                   std::vector<Property>& props) {
+  VertexKey v{.id = from};
+  std::string key;
+  encode_node(v, &key);
+  std::string value;
+  Status s = db_->Get(ReadOptions(), edge_prop_cf_, key, &value);
+  if (!s.ok()) {
+    return s;
+  }
+  std::string::iterator it = value.begin();
+  node_id_t cur_node;
+  while (it < value.end()) {
+    cur_node = decode_id(it);
+    if (cur_node == to) {
+      decode_properties(it, props);
+    } else {
+      skip_properties(it);
+    }
+  }
+  return Status::OK();
+}
+
+std::pair<std::string, std::string> RocksGraph::AddEdges(
+    node_id_t v, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms) {
+  m += static_cast<node_id_t>(tos.size());
+  Edges new_edges{.num_edges_out = static_cast<uint32_t>(tos.size()), .num_edges_in = static_cast<uint32_t>(froms.size())};
   VertexKey v_out{.id = v};
   new_edges.nxts_out = new Edge[new_edges.num_edges_out];
   new_edges.nxts_in = new Edge[new_edges.num_edges_in];
@@ -371,7 +522,7 @@ std::pair<std::string, std::string> RocksGraph::AddEdges(node_id_t v, std::vecto
     new_edges.nxts_out[i].nxt = tos[i];
     mor.AddCounter(v);
   }
-  for (size_t i =  0; i < froms.size(); i++) {
+  for (size_t i = 0; i < froms.size(); i++) {
     new_edges.nxts_in[i].nxt = froms[i];
     mor.AddCounter(v);
   }
@@ -503,15 +654,16 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
     std::string start;
     std::string end;
     encode_node(v, &start);
-    //start.push_back(static_cast<char>(0x00));
+    // start.push_back(static_cast<char>(0x00));
     encode_node(v, &end);
-    std::string::iterator sit=end.begin();
-    for( ; *(sit+1)!=0; ++sit){}
+    std::string::iterator sit = end.begin();
+    for (; *(sit + 1) != 0; ++sit) {
+    }
     *sit = *sit + 1;
 
-    //end.push_back(static_cast<char>(0xFF));
-    // std::cout<<"start: "<< start << std::endl;
-    // std::cout<<"end: "<< end << std::endl;
+    // end.push_back(static_cast<char>(0xFF));
+    //  std::cout<<"start: "<< start << std::endl;
+    //  std::cout<<"end: "<< end << std::endl;
     Slice lower_key((char*)start.c_str());
     Slice upper_key((char*)end.c_str());
 
@@ -627,11 +779,11 @@ node_id_t RocksGraph::GetDegreeApproximate(node_id_t src,
 // }
 
 // Status RocksGraph::GetVertexVal(node_id_t id, Value* val) {
-//   VertexKey v{.id = id, .type = KEY_TYPE_VERTEX_VAL};
+//   VertexKey v{.id = id, .type = KEY_TYPE_PROPERTY};
 //   std::string key;
 //   encode_node(v, &key);
 //   std::string value;
-//   Status s = db_->Get(ReadOptions(), val_cf_, key, &value);
+//   Status s = db_->Get(ReadOptions(), edge_prop_cf_, key, &value);
 //   if (!s.ok()) {
 //     return s;
 //   }
@@ -640,12 +792,12 @@ node_id_t RocksGraph::GetDegreeApproximate(node_id_t src,
 // }
 
 // Status RocksGraph::SetVertexVal(node_id_t id, Value val) {
-//   VertexKey v{.id = id, .type = KEY_TYPE_VERTEX_VAL};
+//   VertexKey v{.id = id, .type = KEY_TYPE_PROPERTY};
 //   std::string key;
 //   encode_node(v, &key);
 //   std::string value;
 //   value.append(reinterpret_cast<const char*>(&val), sizeof(Value));
-//   return db_->Put(WriteOptions(), val_cf_, key, value);
+//   return db_->Put(WriteOptions(), edge_prop_cf_, key, value);
 // }
 
 // Status RocksGraph::SimpleWalk(node_id_t start, float decay_factor) {
