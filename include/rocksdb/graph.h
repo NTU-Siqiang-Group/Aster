@@ -246,14 +246,14 @@ void inline concatenate_properties(const std::vector<Property>& props,
     *value += prop.name + '\0';
     *value += prop.value + '\0';
   }
-  value += '\0';
+  *value += '\0';
 }
 
 void inline concatenate_property(const Property& prop, std::string* value) {
   std::string concatenated;
   *value += prop.name + '\0';
   *value += prop.value + '\0';
-  value += '\0';
+  *value += '\0';
 }
 
 void inline merge_properties(const std::vector<Property>& existing_props,
@@ -472,8 +472,8 @@ class RocksGraph {
   Status GetVertexProperty(node_id_t id, std::vector<Property>& props);
   Status GetEdgeProperty(node_id_t from, node_id_t to,
                          std::vector<Property>& props);
-  node_id_t GetVertexWithProperty(Property prop);
-  std::pair<node_id_t, node_id_t> GetEdgeWithProperty(Property prop);
+  std::vector<node_id_t> GetVerticesWithProperty(Property prop);
+  std::vector<std::pair<node_id_t, node_id_t>> GetEdgesWithProperty(Property prop);
   // node_id_t GetInDegreeApproximate(node_id_t id, int filter_type_manual = 0);
   Status SimpleWalk(node_id_t start, float decay_factor = 0.20);
   void GetRocksDBStats(std::string& stat) {
@@ -597,11 +597,16 @@ class RocksGraph {
   // Status GetVertexVal(node_id_t id, Value* val);
   // Status SetVertexVal(node_id_t id, Value val);
 
-  void printLSM() {
+  void printLSM(int colume = 0) {
     std::cout << "n = " << n << std::endl;
     std::cout << "m = " << m << std::endl;
     ColumnFamilyMetaData cf_meta;
-    db_->GetColumnFamilyMetaData(adj_cf_, &cf_meta);
+    if(colume == 0)
+      db_->GetColumnFamilyMetaData(adj_cf_, &cf_meta);
+    else if(colume == 1)
+      db_->GetColumnFamilyMetaData(edge_prop_cf_, &cf_meta);
+    else if(colume == 2)
+      db_->GetColumnFamilyMetaData(vertex_prop_cf_, &cf_meta);
     std::cout << "Print LSM" << std::endl;
     // int largest_used_level = 0;
     // for (auto level : cf_meta.levels) {

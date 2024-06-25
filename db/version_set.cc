@@ -2396,7 +2396,6 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
   if (merge_operator_) {
     pinned_iters_mgr->StartPinning();
   }
-
   FilePicker fp(user_key, ikey, &storage_info_.level_files_brief_,
                 storage_info_.num_non_empty_levels_,
                 &storage_info_.file_indexer_, user_comparator(),
@@ -2436,7 +2435,6 @@ void Version::Get(const ReadOptions& read_options, const LookupKey& k,
       }
       return;
     }
-
     // report the counters before returning
     if (get_context.State() != GetContext::kNotFound &&
         get_context.State() != GetContext::kMerge &&

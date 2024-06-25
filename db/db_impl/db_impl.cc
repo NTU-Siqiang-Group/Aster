@@ -2092,7 +2092,6 @@ Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
          get_impl_options.columns != nullptr);
 
   assert(get_impl_options.column_family);
-
   if (read_options.timestamp) {
     const Status s = FailIfTsMismatchCf(get_impl_options.column_family,
                                         *(read_options.timestamp));
@@ -2294,8 +2293,7 @@ Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
         get_impl_options.get_value ? get_impl_options.is_blob_index : nullptr,
         get_impl_options.get_value);
     RecordTick(stats_, MEMTABLE_MISS);
-  }
-
+  } 
   {
     PERF_TIMER_GUARD(get_post_process_time);
 

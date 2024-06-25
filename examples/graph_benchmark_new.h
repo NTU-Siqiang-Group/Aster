@@ -164,9 +164,8 @@ class GraphBenchmarkTool {
 
   void LoadRandomGraph(node_id_t n, node_id_t m) {
     Status s;
-    //srand(time(NULL));
-    if(reinit_)
-      InitNodes(n);
+    // srand(time(NULL));
+    if (reinit_) InitNodes(n);
     for (int i = 0; i < m; i++) {
       if (i % (m / 100) == 0) {
         printf("\r");
@@ -212,7 +211,8 @@ class GraphBenchmarkTool {
       if (i % (n / 20) == 0) {
         std::cout << (i * 100) / (double)n << "\t%" << std::endl;
       }
-      int degree = generatePowerLawDegree(alpha, min_degree, max_degree, gen) * density;
+      int degree =
+          generatePowerLawDegree(alpha, min_degree, max_degree, gen) * density;
       // printf("degree:%d\n", degree);
       m_edge_count += degree;
       for (int j = 0; j < degree; j++) {
@@ -271,7 +271,6 @@ class GraphBenchmarkTool {
     double read_time_spent = 0, write_time_spent = 0;
     struct timespec t1, t2;
     for (int i = 0; i < operation_num; i++) {
-      
       if (rand() / (double)RAND_MAX < update_ratio) {
         node_id_t from, to;
         from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
@@ -428,7 +427,7 @@ class GraphBenchmarkTool {
       }
       std::cout << " ||\t" << edges.num_edges_out + edges.num_edges_in;
       std::cout << " ||\t" << graph_->GetDegreeApproximate(from);
-      //std::cout << " ||\t" << graph_->GetInDegreeApproximate(from);
+      // std::cout << " ||\t" << graph_->GetInDegreeApproximate(from);
       std::cout << std::endl;
     }
     return;
@@ -520,6 +519,98 @@ class GraphBenchmarkTool {
     return;
   }
 
+  void PropertyTest(node_id_t n = 10000, node_id_t d = 10) {
+    InitNodes(n);
+    Status s;
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        if (is_directed_) {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        } else {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          s = graph_->AddEdge(to, from);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        }
+      }
+    }
+
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        Property prop{.name = std::to_string(from), .value=std::to_string(to)};
+        s = graph_->AddEdgeProperty(from, to, prop);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      }
+    }
+
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        Property prop{.name = "a", .value="b"};
+        s = graph_->AddEdgeProperty(from, to, prop);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      }
+    }
+
+    for (int i = 1; i <= d; i++) {
+      for (int j = 0; j < n; j += 100) {
+        std::vector<Property> props;
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        s = graph_->GetEdgeProperty(from, to, props);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+        std::cout << from << "-->" << to << " || ";
+        for (Property prop : props) {
+          std::cout << prop.name << ": " << prop.value << " || ";
+        }
+        std::cout << std::endl;
+      }
+    }
+    printf("\n");
+    return;
+  }
+
   void CompareDegreeFilterAccuracy(node_id_t n, node_id_t m) {
     Status s;
     double cms_relative_error = 0;
@@ -556,7 +647,8 @@ class GraphBenchmarkTool {
       // mor_absolute_error += abs(real_degree - graph_->GetDegreeApproximate(
       //                                             from, FILTER_TYPE_MORRIS));
       // mor_relative_error += abs(real_degree - graph_->GetDegreeApproximate(
-      //                                             from, FILTER_TYPE_MORRIS)) /
+      //                                             from, FILTER_TYPE_MORRIS))
+      //                                             /
       //                       (double)real_degree;
       std::cout << from << " ||\t";
       for (node_id_t i = 0; i < edges.num_edges_out; i++) {
@@ -621,7 +713,7 @@ class GraphBenchmarkTool {
     stat += "\n" + profiler_.ToString();
   }
 
-  void printLSM() { graph_->printLSM(); }
+  void printLSM(int colume = 0) { graph_->printLSM(colume); }
 
   void SetRatio(double update_ratio, double lookup_ratio) {
     graph_->SetRatio(update_ratio, lookup_ratio);
