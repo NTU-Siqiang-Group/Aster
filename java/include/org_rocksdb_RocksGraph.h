@@ -43,6 +43,22 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddEdge
 
 /*
  * Class:     org_rocksdb_RocksGraph
+ * Method:    AddVertexProperty
+ * Signature: (JJLjava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddVertexProperty
+  (JNIEnv *, jobject, jlong, jlong, jstring, jstring);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    AddEdgeProperty
+ * Signature: (JJJLjava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddEdgeProperty
+  (JNIEnv *, jobject, jlong, jlong, jlong, jstring, jstring);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
  * Method:    DeleteEdge
  * Signature: (JJJ)V
  */
@@ -88,6 +104,22 @@ JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetInNeighbours
  */
 JNIEXPORT jobjectArray JNICALL Java_org_rocksdb_RocksGraph_GetAllNeighbours
   (JNIEnv *, jobject, jlong, jlong);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    GetVertexWithProperty
+ * Signature: (JLjava/lang/String;Ljava/lang/String;)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetVertexWithProperty
+  (JNIEnv *, jobject, jlong, jstring, jstring);
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    GetEdgeWithProperty
+ * Signature: (JLjava/lang/String;Ljava/lang/String;)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetEdgeWithProperty
+  (JNIEnv *, jobject, jlong, jstring, jstring);
 
 /*
  * Class:     org_rocksdb_RocksGraph

@@ -318,3 +318,107 @@ JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_disposeInternal(
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
   graph_db->~RocksGraph();
 }
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    AddVertexProperty
+ * Signature: (JJLjava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddVertexProperty(
+    JNIEnv* env, jobject, jlong jdb_handle, jlong id, jstring property_key,
+    jstring property_value) {
+  const char* key_cstr = env->GetStringUTFChars(property_key, NULL);
+  const char* value_cstr = env->GetStringUTFChars(property_value, NULL);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  ROCKSDB_NAMESPACE::Property prop;
+  prop.name = key_cstr;
+  prop.value = value_cstr;
+  graph_db->AddVertexProperty(static_cast<ROCKSDB_NAMESPACE::node_id_t>(id),
+                              prop);
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    AddEdgeProperty
+ * Signature: (JJJLjava/lang/String;Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_org_rocksdb_RocksGraph_AddEdgeProperty(
+    JNIEnv* env, jobject, jlong jdb_handle, jlong source_id, jlong target_id,
+    jstring property_key, jstring property_value) {
+  const char* key_cstr = env->GetStringUTFChars(property_key, NULL);
+  const char* value_cstr = env->GetStringUTFChars(property_value, NULL);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  ROCKSDB_NAMESPACE::Property prop;
+  prop.name = key_cstr;
+  prop.value = value_cstr;
+  graph_db->AddEdgeProperty(
+      static_cast<ROCKSDB_NAMESPACE::node_id_t>(source_id),
+      static_cast<ROCKSDB_NAMESPACE::node_id_t>(target_id), prop);
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    GetVertexWithProperty
+ * Signature: (JLjava/lang/String;Ljava/lang/String;)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetVertexWithProperty(
+    JNIEnv* env, jobject, jlong jdb_handle, jstring property_key,
+    jstring property_value) {
+  const char* key_cstr = env->GetStringUTFChars(property_key, NULL);
+  const char* value_cstr = env->GetStringUTFChars(property_value, NULL);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  ROCKSDB_NAMESPACE::Property prop;
+  prop.name = key_cstr;
+  prop.value = value_cstr;
+  std::vector<ROCKSDB_NAMESPACE::node_id_t> vertices = graph_db->GetVerticesWithProperty(prop);
+  const jsize resultsLen = static_cast<jsize>(vertices.size());
+  std::unique_ptr<jlong[]> results =
+      std::unique_ptr<jlong[]>(new jlong[resultsLen]);
+  for (size_t i = 0; i < vertices.size(); i++) {
+    results[i] = static_cast<jlong>(vertices[i]);
+  }
+  jlongArray jresults = env->NewLongArray(resultsLen);
+  env->SetLongArrayRegion(jresults, 0, resultsLen, results.get());
+  if (env->ExceptionCheck()) {
+    // exception thrown: ArrayIndexOutOfBoundsException
+    env->DeleteLocalRef(jresults);
+    return nullptr;
+  }
+  return jresults;
+}
+
+/*
+ * Class:     org_rocksdb_RocksGraph
+ * Method:    GetEdgeWithProperty
+ * Signature: (JLjava/lang/String;Ljava/lang/String;)[J
+ */
+JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetEdgeWithProperty(
+    JNIEnv* env, jobject, jlong jdb_handle, jstring property_key,
+    jstring property_value) {
+  const char* key_cstr = env->GetStringUTFChars(property_key, NULL);
+  const char* value_cstr = env->GetStringUTFChars(property_value, NULL);
+  ROCKSDB_NAMESPACE::RocksGraph* graph_db =
+      reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
+  ROCKSDB_NAMESPACE::Property prop;
+  prop.name = key_cstr;
+  prop.value = value_cstr;
+  std::vector<std::pair<ROCKSDB_NAMESPACE::node_id_t, ROCKSDB_NAMESPACE::node_id_t>> edges = graph_db->GetEdgesWithProperty(prop);
+  const jsize resultsLen = static_cast<jsize>(edges.size()*2);
+  std::unique_ptr<jlong[]> results =
+      std::unique_ptr<jlong[]>(new jlong[resultsLen]);
+  for (size_t i = 0; i < edges.size(); i++) {
+    results[2*i] = static_cast<jlong>(edges[i].first);
+    results[2*i+1] = static_cast<jlong>(edges[i].second);
+  }
+  jlongArray jresults = env->NewLongArray(resultsLen);
+  env->SetLongArrayRegion(jresults, 0, resultsLen, results.get());
+  if (env->ExceptionCheck()) {
+    // exception thrown: ArrayIndexOutOfBoundsException
+    env->DeleteLocalRef(jresults);
+    return nullptr;
+  }
+  return jresults;
+}

@@ -99,6 +99,22 @@ public class RocksGraph extends RocksObject {
     SetCacheMissRate(nativeHandle_, cache_miss_rate);
   }
 
+  public void AddVertexProperty(final long id, final String name, final String value) throws RocksDBException {
+    AddVertexProperty(nativeHandle_, id, name, value);
+  }
+
+  public void AddEdgeProperty(final long source_id, final long target_id, final String name, final String value) throws RocksDBException {
+    AddEdgeProperty(nativeHandle_, source_id, target_id, name, value);
+  }
+
+  public long[] GetVertexWithProperty(final String name, final String value) throws RocksDBException {
+    return GetVertexWithProperty(nativeHandle_, name, value);
+  }
+
+  public long[] GetEdgeWithProperty(final String name, final String value) throws RocksDBException {
+    return GetEdgeWithProperty(nativeHandle_, name, value);
+  }
+
   private static native long Reinitialize(final long optionsHandle, final int policy)
       throws RocksDBException;
 
@@ -110,6 +126,12 @@ public class RocksGraph extends RocksObject {
 
   private native void AddEdge(final long handle, final long source_id,
       final long target_id) throws RocksDBException;
+
+  private native void AddVertexProperty(final long handle, final long id, final String name, final String value)
+      throws RocksDBException;
+
+  private native void AddEdgeProperty(final long handle, final long source_id,
+      final long target_id, final String name, final String value) throws RocksDBException;
 
   private native void DeleteEdge(final long handle, final long source_id,
       final long target_id) throws RocksDBException;
@@ -123,6 +145,10 @@ public class RocksGraph extends RocksObject {
   private native long[] GetInNeighbours(final long handle, final long id) throws RocksDBException;
 
   private native long[][] GetAllNeighbours(final long handle, final long id) throws RocksDBException;
+
+  private native long[] GetVertexWithProperty(final long handle, final String name, final String value) throws RocksDBException;
+
+  private native long[] GetEdgeWithProperty(final long handle, final String name, final String value) throws RocksDBException;
 
   private native int InDegree(final long handle, final long id) throws RocksDBException;
 

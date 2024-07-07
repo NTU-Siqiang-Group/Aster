@@ -335,6 +335,7 @@ Status RocksGraph::AddVertex(node_id_t id) {
   db_->Put(WriteOptions(), adj_cf_, key, value);
   value = "";
   db_->Put(WriteOptions(), edge_prop_cf_, key, value);
+  db_->Put(WriteOptions(), vertex_prop_cf_, key, value);
   return Status::OK();
 }
 
@@ -461,7 +462,7 @@ Status RocksGraph::AddVertexProperty(node_id_t id, Property prop) {
   std::string key, value;
   encode_node(v, &key);
   concatenate_property(prop, &value);
-  return db_->Merge(WriteOptions(), vertex_prop_cf_, key, value);
+  return db_->Put(WriteOptions(), vertex_prop_cf_, key, value);
 }
 
 Status RocksGraph::AddEdgeProperty(node_id_t from, node_id_t to,
@@ -526,8 +527,8 @@ std::vector<std::pair<node_id_t, node_id_t>> RocksGraph::GetEdgesWithProperty(
       std::vector<Property> props;
       to = decode_id(str_it);
       decode_properties(str_it, props);
-      for(Property value_prop: props){
-        if(value_prop.name == prop.name && value_prop.value == prop.value){
+      for (Property value_prop : props) {
+        if (value_prop.name == prop.name && value_prop.value == prop.value) {
           result.push_back(std::make_pair(from, to));
           break;
         }
@@ -543,6 +544,34 @@ std::vector<std::pair<node_id_t, node_id_t>> RocksGraph::GetEdgesWithProperty(
   return result;
 }
 
+std::vector<node_id_t> RocksGraph::GetVerticesWithProperty(Property prop) {
+  std::vector<node_id_t> result;
+  node_id_t from;
+  std::unique_ptr<rocksdb::Iterator> it(
+      db_->NewIterator(ReadOptions(), edge_prop_cf_));
+  for (it->SeekToFirst(); it->Valid(); it->Next()) {
+    from = decode_node(it->key().ToString());
+    std::string value = it->value().ToString();
+    std::string::iterator str_it = value.begin();
+    while (str_it < value.end()) {
+      std::vector<Property> props;
+      decode_properties(str_it, props);
+      for (Property value_prop : props) {
+        if (value_prop.name == prop.name && value_prop.value == prop.value) {
+          result.push_back(from);
+          break;
+        }
+      }
+    }
+  }
+
+  if (!it->status().ok()) {
+    std::cout << "An error occurred during iteration: "
+              << it->status().ToString() << std::endl;
+  }
+
+  return result;
+}
 std::pair<std::string, std::string> RocksGraph::AddEdges(
     node_id_t v, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms) {
   m += static_cast<node_id_t>(tos.size());
