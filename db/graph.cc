@@ -548,7 +548,7 @@ std::vector<node_id_t> RocksGraph::GetVerticesWithProperty(Property prop) {
   std::vector<node_id_t> result;
   node_id_t from;
   std::unique_ptr<rocksdb::Iterator> it(
-      db_->NewIterator(ReadOptions(), edge_prop_cf_));
+      db_->NewIterator(ReadOptions(), vertex_prop_cf_));
   for (it->SeekToFirst(); it->Valid(); it->Next()) {
     from = decode_node(it->key().ToString());
     std::string value = it->value().ToString();
