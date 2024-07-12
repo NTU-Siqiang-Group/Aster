@@ -449,6 +449,7 @@ class RocksGraph {
     WriteMeta(db_path + meta_filename, meta);
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(edge_prop_cf_);
+    db_->DestroyColumnFamilyHandle(vertex_prop_cf_);
     db_->SyncWAL();
     db_->Close();
     // delete db_;

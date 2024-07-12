@@ -611,6 +611,99 @@ class GraphBenchmarkTool {
     return;
   }
 
+  void VertexPropertyTest(node_id_t n = 10000, node_id_t d = 10) {
+    InitNodes(n);
+    Status s;
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        if (is_directed_) {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        } else {
+          s = graph_->AddEdge(from, to);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          s = graph_->AddEdge(to, from);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+        }
+      }
+    }
+
+    // for (int i = 1; i <= d; i++) {
+    //   printf("\r");
+    //   printf("%f", (i * 100) / (double)d);
+    //   fflush(stdout);
+    //   for (int j = 0; j < n; j++) {
+    //     node_id_t from, to;
+    //     from = j;
+    //     to = j + i;
+    //     to = to % n;
+    //     Property prop{.name = std::to_string(from), .value=std::to_string(to)};
+    //     s = graph_->AddVertexProperty(to, prop);
+    //     if (!s.ok()) {
+    //       std::cout << "add error: " << s.ToString() << std::endl;
+    //       exit(0);
+    //     }
+    //   }
+    // }
+
+    for (int i = 1; i <= d; i++) {
+      printf("\r");
+      printf("%f", (i * 100) / (double)d);
+      fflush(stdout);
+      for (int j = 0; j < n; j++) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        Property prop{.name = "a", .value=std::to_string(to)};
+        s = graph_->AddVertexProperty(from, prop);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      }
+    }
+
+    for (int i = 1; i <= d; i++) {
+      for (int j = 0; j < n; j += 100) {
+        node_id_t from, to;
+        from = j;
+        to = j + i;
+        to = to % n;
+        Property prop{.name = "a", .value=std::to_string(to)};
+        std::vector<node_id_t> vertices;
+        vertices = graph_->GetVerticesWithProperty(prop);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+        std::cout << from << "-->" << to << " || ";
+        for (node_id_t v : vertices) {
+          std::cout << "vertices" << ": " << v << " || ";
+        }
+        std::cout << std::endl;
+      }
+    }
+    printf("\n");
+    return;
+  }
+
   void CompareDegreeFilterAccuracy(node_id_t n, node_id_t m) {
     Status s;
     double cms_relative_error = 0;
