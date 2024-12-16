@@ -24,7 +24,7 @@ void setup_bloom_filter(rocksdb::Options& options) {
 }
 
 int main(int argc, char* argv[]) {
-  int edge_update_policy = EDGE_UPDATE_LAZY;
+  int edge_update_policy = EDGE_UPDATE_ADAPTIVE;
   int encoding_type = ENCODING_TYPE_NONE;
   bool reinit = true;
   rocksdb::Options options;
@@ -67,9 +67,10 @@ int main(int argc, char* argv[]) {
   // tool.TradeOffTest(load_n, &options);
   // return 0;
   auto load_start = std::chrono::steady_clock::now();
-  tool.LoadRandomGraph(load_n, load_m);
+  //tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraphNew(load_n, 2);
   //tool.DeleteTest();
+  tool.TinyExample();
       
   auto load_end = std::chrono::steady_clock::now();
   std::cout << "put latency: "
@@ -79,6 +80,7 @@ int main(int argc, char* argv[]) {
             << std::endl;
 
   auto exec_start = std::chrono::steady_clock::now();
+  return 0;
   int get_n = 100;
   tool.RandomLookups(load_n, get_n);
   // tool.CompareDegreeFilterAccuracy(40000, 40000);

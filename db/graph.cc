@@ -605,7 +605,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
   if (out_policy == EDGE_UPDATE_ADAPTIVE) {
     out_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
   }
-  if (edge_update_policy_ == EDGE_UPDATE_LAZY &&
+  if (out_policy == EDGE_UPDATE_LAZY &&
       encoding_type_ != ENCODING_TYPE_EFP) {
     Edges edges{.num_edges_out = 1, .num_edges_in = 0};
     edges.nxts_out = new Edge[1];
@@ -616,7 +616,7 @@ Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {
     if (!s.ok() && !s.IsNotFound()) {
       return s;
     }
-  } else if (edge_update_policy_ == EDGE_UPDATE_EAGER ||
+  } else if (out_policy == EDGE_UPDATE_EAGER ||
              encoding_type_ == ENCODING_TYPE_EFP) {
     Edges existing_edges{.num_edges_out = 0};
     s = GetAllEdges(from, &existing_edges);

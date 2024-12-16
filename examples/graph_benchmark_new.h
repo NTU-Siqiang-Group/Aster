@@ -704,6 +704,50 @@ class GraphBenchmarkTool {
     return;
   }
 
+  void TinyExample(){
+    node_id_t vertex1 = 1;
+    node_id_t vertex2 = 2;
+    node_id_t vertex3 = 3;
+
+    if (!graph_->AddVertex(vertex1).ok() || !graph_->AddVertex(vertex2).ok() || !graph_->AddVertex(vertex3).ok()) {
+        std::cerr << "Error adding vertices" << std::endl;
+        return;
+    }
+
+    if (!graph_->AddEdge(vertex1, vertex2).ok() || !graph_->AddEdge(vertex1, vertex3).ok()) {
+        std::cerr << "Error adding edges" << std::endl;
+        return;
+    }
+
+    Edges edges;
+    if (graph_->GetAllEdges(vertex1, &edges).ok()) {
+        std::cout << "Edges from vertex " << vertex1 << ":\n";
+        for (uint32_t i = 0; i < edges.num_edges_out; ++i) {
+            std::cout << " -> " << edges.nxts_out[i].nxt << std::endl;
+        }
+        free_edges(&edges);
+    } else {
+        std::cerr << "Error retrieving edges from vertex " << vertex1 << std::endl;
+    }
+
+    if (graph_->DeleteEdge(vertex1, vertex2).ok()) {
+        std::cout << "Edge from vertex " << vertex1 << " to vertex " << vertex2 << " deleted" << std::endl;
+    } else {
+        std::cerr << "Error deleting edge from vertex " << vertex1 << " to vertex " << vertex2 << std::endl;
+    }
+
+    if (graph_->GetAllEdges(vertex1, &edges).ok()) {
+        std::cout << "Edges from vertex " << vertex1 << ":\n";
+        for (uint32_t i = 0; i < edges.num_edges_out; ++i) {
+            std::cout << " -> " << edges.nxts_out[i].nxt << std::endl;
+        }
+        free_edges(&edges);
+    } else {
+        std::cerr << "Error retrieving edges from vertex " << vertex1 << std::endl;
+    }
+
+  }
+
   void CompareDegreeFilterAccuracy(node_id_t n, node_id_t m) {
     Status s;
     double cms_relative_error = 0;
