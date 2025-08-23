@@ -11,7 +11,6 @@
 #include <fstream>
 #include <algorithm>
 
-DEFINE_string(write_sst_path, "/home/junfeng/db_backup/", "sst file path");
 DEFINE_string(dataset, "", "graph dataset");
 DEFINE_bool(is_undirected, false, "is undirected graph");
 
