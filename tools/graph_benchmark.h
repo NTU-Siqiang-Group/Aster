@@ -175,7 +175,7 @@ class GraphBenchmarkTool {
         profiler_.AddStat("add_edges", t.Elapsed());
       } else if (op == "get") {
         Timer t;
-        Edges edges;
+        EdgesBidirected edges;
         s = graph_->GetAllEdges(from, &edges);
         free_edges(&edges);
         if (!s.ok()) {

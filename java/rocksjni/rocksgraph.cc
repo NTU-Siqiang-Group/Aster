@@ -148,7 +148,7 @@ JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetOutNeighbours(
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
 
-  ROCKSDB_NAMESPACE::Edges edges;
+  ROCKSDB_NAMESPACE::EdgesBidirected edges;
   ROCKSDB_NAMESPACE::Status s = graph_db->GetAllEdges(
       static_cast<ROCKSDB_NAMESPACE::node_id_t>(id), &edges);
   if (!s.ok()) {
@@ -182,7 +182,7 @@ JNIEXPORT jlongArray JNICALL Java_org_rocksdb_RocksGraph_GetInNeighbours(
     JNIEnv* env, jobject, jlong jdb_handle, jlong id) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-  ROCKSDB_NAMESPACE::Edges edges;
+  ROCKSDB_NAMESPACE::EdgesBidirected edges;
   ROCKSDB_NAMESPACE::Status s = graph_db->GetAllEdges(
       static_cast<ROCKSDB_NAMESPACE::node_id_t>(id), &edges);
   if (!s.ok()) {
@@ -225,7 +225,7 @@ JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_InDegree(JNIEnv*, jobject,
                                                             jlong id) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-  ROCKSDB_NAMESPACE::Edges edges;
+  ROCKSDB_NAMESPACE::EdgesBidirected edges;
   // ROCKSDB_NAMESPACE::node_id_t vertex_id = static_cast<node_id_t> id;
   ROCKSDB_NAMESPACE::Status s = graph_db->GetAllEdges(
       static_cast<ROCKSDB_NAMESPACE::node_id_t>(id), &edges);
@@ -242,7 +242,7 @@ JNIEXPORT jint JNICALL Java_org_rocksdb_RocksGraph_OutDegree(JNIEnv*, jobject,
                                                              jlong id) {
   ROCKSDB_NAMESPACE::RocksGraph* graph_db =
       reinterpret_cast<ROCKSDB_NAMESPACE::RocksGraph*>(jdb_handle);
-  ROCKSDB_NAMESPACE::Edges edges;
+  ROCKSDB_NAMESPACE::EdgesBidirected edges;
   ROCKSDB_NAMESPACE::Status s = graph_db->GetAllEdges(
       static_cast<ROCKSDB_NAMESPACE::node_id_t>(id), &edges);
   return static_cast<jint>(edges.num_edges_out);

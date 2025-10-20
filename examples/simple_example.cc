@@ -67,10 +67,10 @@ int main(int argc, char* argv[]) {
   // tool.TradeOffTest(load_n, &options);
   // return 0;
   auto load_start = std::chrono::steady_clock::now();
-  //tool.LoadRandomGraph(load_n, load_m);
+  tool.LoadRandomGraph(load_n, load_m);
   //tool.LoadPowerLawGraphNew(load_n, 2);
   //tool.DeleteTest();
-  tool.TinyExample();
+  //tool.TinyExample();
       
   auto load_end = std::chrono::steady_clock::now();
   std::cout << "put latency: "

@@ -33,6 +33,8 @@ using edge_id_t = int64_t;
 #define FILTER_TYPE_MORRIS 0x2
 #define FILTER_TYPE_ALL 0x3  // this option is purely for comparison test
 
+extern std::atomic<bool> g_seperate_in_and_out;
+
 // a 4 byte value
 union Value {
   uint32_t val;
@@ -47,11 +49,16 @@ struct Edge {
 // using Edge = int64_t;
 
 // 4+12x bytes
-struct Edges {
+struct EdgesBidirected {
   uint32_t num_edges_out = 0;
   uint32_t num_edges_in = 0;
   Edge* nxts_out = NULL;
   Edge* nxts_in = NULL;
+};
+
+struct EdgesUndirected {
+  uint32_t num_edges = 0;
+  Edge* nxts = NULL;
 };
 
 struct EdgesEncodedEF {
@@ -73,10 +80,10 @@ struct Property {
 };
 
 // void decode_node(VertexKey* v, const std::string& key);
-// void decode_edges(Edges* edges, const std::string& value);
+// void decode_edges(EdgesBidirected* edges, const std::string& value);
 // void encode_node(VertexKey v, std::string* key);
 // void encode_edge(const Edge* edge, std::string* value);
-// void encode_edges(const Edges* edges, std::string* value);
+// void encode_edges(const EdgesBidirected* edges, std::string* value);
 
 void inline encode_node(VertexKey v, std::string* key) {
   // key->append(reinterpret_cast<const char*>(&v), sizeof(VertexKey));
@@ -90,11 +97,27 @@ void inline encode_node(VertexKey v, std::string* key) {
   // }
 }
 
+void inline encode_node(VertexKey v, std::string* key, bool is_out_neighbors) {
+  int byte_to_fill = sizeof(v.id);
+  for (int i = byte_to_fill - 1; i >= 0; i--) {
+    key->push_back((v.id >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+  }
+   key->push_back(static_cast<char>(is_out_neighbors ? 1 : 0));
+}
+
 void inline encode_node(node_id_t v, std::string* key) {
   int byte_to_fill = sizeof(v);
   for (int i = byte_to_fill - 1; i >= 0; i--) {
     key->push_back((v >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
   }
+}
+
+void inline encode_node(node_id_t v, std::string* key, bool is_out_neighbors) {
+  int byte_to_fill = sizeof(v);
+  for (int i = byte_to_fill - 1; i >= 0; i--) {
+    key->push_back((v >> ((byte_to_fill - i - 1) << 3)) & 0xFF);
+  }
+   key->push_back(static_cast<char>(is_out_neighbors ? 1 : 0));
 }
 
 void inline encode_node_hash(VertexKey v, node_id_t edge, std::string* key) {
@@ -116,6 +139,44 @@ node_id_t inline decode_node(const std::string& key) {
   return *reinterpret_cast<const node_id_t*>(key.data());
 }
 
+inline bool decode_node(VertexKey* v, bool* is_out_neighbors, const std::string& key) {
+    const size_t n = sizeof(v->id);
+    if (key.size() < n + 1) return false; 
+
+    const size_t flag_pos = key.size() - 1;
+    const unsigned char flag_byte =
+        static_cast<unsigned char>(key[flag_pos]);
+    if (is_out_neighbors) *is_out_neighbors = (flag_byte != 0);
+
+    const size_t id_start = flag_pos - n;
+    uint64_t id = 0;
+    for (size_t i = 0; i < n; ++i) {
+        id = (id << 8) |
+             static_cast<unsigned char>(key[id_start + i]); 
+    }
+    v->id = id;
+    return true;
+}
+
+inline bool decode_node(node_id_t *v, bool* is_out_neighbors, const std::string& key) {
+    const size_t n = sizeof(node_id_t);
+    if (key.size() < n + 1) return false; 
+
+    const size_t flag_pos = key.size() - 1;
+    const unsigned char flag_byte =
+        static_cast<unsigned char>(key[flag_pos]);
+    if (is_out_neighbors) *is_out_neighbors = (flag_byte != 0);
+
+    const size_t id_start = flag_pos - n;
+    uint64_t id = 0;
+    for (size_t i = 0; i < n; ++i) {
+        id = (id << 8) |
+             static_cast<unsigned char>(key[id_start + i]); 
+    }
+    *v = id;
+    return true;
+}
+
 void inline encode_edge(const Edge* edge, std::string* value) {
   // int byte_to_fill = sizeof(Value);
   // for (int i = byte_to_fill - 1; i >= 0; i--) {
@@ -133,7 +194,7 @@ void inline encode_edge(const Edge* edge, std::string* value) {
 }
 
 void inline encode_edges(
-    const Edges* edges, std::string* value, int encoding_type,
+    const EdgesBidirected* edges, std::string* value, int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   // copy the number of edges
   // value->append(reinterpret_cast<const char*>(edges), sizeof(int) +
@@ -148,7 +209,7 @@ void inline encode_edges(
                      0xFF);
   }
   // std::cout << "num_edges_out: " << edges->num_edges_out << std::endl;
-  // Edges n;
+  // EdgesBidirected n;
   // decode_edges(&n, *value);
   // std::cout << "num_edges_out: " << n.num_edges_out << std::endl;
   // exit(0);
@@ -185,8 +246,20 @@ void inline encode_edges(
   }
 }
 
+void inline encode_edges(const EdgesUndirected* edges, std::string* value){
+  int byte_to_fill = sizeof(edges->num_edges);
+  for (int i = byte_to_fill - 1; i >= 0; i--) {
+    value->push_back((edges->num_edges >> ((byte_to_fill - i - 1) << 3)) &
+                     0xFF);
+  }
+  for (uint32_t i = 0; i < edges->num_edges; i++) {
+    encode_edge(&edges->nxts[i], value);
+  }
+}
+
+
 void inline decode_edges(
-    Edges* edges, const std::string& value, int encoding_type,
+    EdgesBidirected* edges, const std::string& value, int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
@@ -235,9 +308,20 @@ void inline decode_edges(
   }
 }
 
-void inline free_edges(Edges* edges) {
+void inline decode_edges(EdgesUndirected* edges, const std::string& value){
+  edges->num_edges = *reinterpret_cast<const uint32_t*>(value.data());
+  edges->nxts = new Edge[edges->num_edges];
+  memcpy(edges->nxts, value.data() + sizeof(uint32_t) * 2,
+          edges->num_edges * sizeof(Edge));
+}
+
+void inline free_edges(EdgesBidirected* edges) {
   delete[] edges->nxts_out;
   delete[] edges->nxts_in;
+}
+
+void inline free_edges(EdgesUndirected* edges) {
+  delete[] edges->nxts;
 }
 
 void inline concatenate_properties(const std::vector<Property>& props,
@@ -353,6 +437,7 @@ class RocksGraph {
   int encoding_type_ = ENCODING_TYPE_NONE;
   int edge_update_policy_ = EDGE_UPDATE_EAGER;
   bool auto_reinitialize_ = false;
+  bool directed_entry = false;
   double update_ratio_ = 0.5;
   double lookup_ratio_ = 0.5;
   double cache_miss_rate_ = 0.9;
@@ -466,7 +551,10 @@ class RocksGraph {
                                                std::vector<node_id_t>& froms);
   DB* get_raw_db() { return db_; }
   Status DeleteEdge(node_id_t from, node_id_t to);
-  Status GetAllEdges(node_id_t src, Edges* edges);
+  Status GetAllEdges(node_id_t src, EdgesBidirected* edges);
+  Status GetAllEdges(node_id_t src, EdgesUndirected* edges, bool is_out);
+  Status GetAllOutEdges(node_id_t src, EdgesUndirected* edges);
+  Status GetAllInEdges(node_id_t src, EdgesUndirected* edges);
   node_id_t GetOutDegree(node_id_t id);
   node_id_t GetInDegree(node_id_t id);
   node_id_t GetDegreeApproximate(node_id_t id, int filter_type_manual = 0);

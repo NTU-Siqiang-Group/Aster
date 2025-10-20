@@ -290,7 +290,7 @@ class GraphBenchmarkTool {
         node_id_t from;
         from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
         from = from % n;
-        Edges edges{.num_edges_out = 0, .num_edges_in = 0};
+        EdgesBidirected edges{.num_edges_out = 0, .num_edges_in = 0};
         clock_gettime(CLOCK_MONOTONIC, &t1);
         s = graph_->GetAllEdges(from, &edges);
         clock_gettime(CLOCK_MONOTONIC, &t2);
@@ -340,7 +340,7 @@ class GraphBenchmarkTool {
           node_id_t from;
           from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
           from = s * (n / section_num) + (from % (n / section_num));
-          Edges edges;
+          EdgesBidirected edges;
           clock_gettime(CLOCK_MONOTONIC, &t1);
           sta = graph_->GetAllEdges(from, &edges);
           clock_gettime(CLOCK_MONOTONIC, &t2);
@@ -411,7 +411,7 @@ class GraphBenchmarkTool {
       node_id_t from;
       from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
       from = from % n;
-      Edges edges;
+      EdgesBidirected edges;
       s = graph_->GetAllEdges(from, &edges);
       if (!s.ok()) {
         std::cout << "get error: " << s.ToString() << std::endl;
@@ -719,7 +719,7 @@ class GraphBenchmarkTool {
         return;
     }
 
-    Edges edges;
+    EdgesBidirected edges;
     if (graph_->GetAllEdges(vertex1, &edges).ok()) {
         std::cout << "Edges from vertex " << vertex1 << ":\n";
         for (uint32_t i = 0; i < edges.num_edges_out; ++i) {
@@ -769,7 +769,7 @@ class GraphBenchmarkTool {
       node_id_t from, to;
       from = (static_cast<node_id_t>(rand()) << (sizeof(int) * 8)) | rand();
       from = from % n;
-      Edges edges;
+      EdgesBidirected edges;
       s = graph_->GetAllEdges(from, &edges);
       if (!s.ok()) {
         std::cout << "get error: " << s.ToString() << std::endl;
@@ -825,7 +825,7 @@ class GraphBenchmarkTool {
         profiler_.AddStat("add_edges", t.Elapsed());
       } else if (op == "get") {
         Timer t;
-        Edges edges;
+        EdgesBidirected edges;
         s = graph_->GetAllEdges(from, &edges);
         free_edges(&edges);
         if (!s.ok()) {
