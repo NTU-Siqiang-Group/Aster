@@ -16,7 +16,7 @@
 
 // Database with Transaction support.
 //
-// See transaction.h and examples/transaction_example.cc
+// See transaction.h for usage notes.
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -503,4 +503,3 @@ class TransactionDB : public StackableDB {
 };
 
 }  // namespace ROCKSDB_NAMESPACE
-

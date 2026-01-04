@@ -31,7 +31,7 @@ static const std::string option_file_header =
     "# This is a RocksDB option file.\n"
     "#\n"
     "# For detailed file format spec, please refer to the example file\n"
-    "# in examples/rocksdb_option_file_example.ini\n"
+    "# in tools/advisor/test/input_files/rocksdb_option_file_example.ini\n"
     "#\n"
     "\n";
 
@@ -733,4 +733,3 @@ Status RocksDBOptionsParser::VerifyTableFactory(
   return Status::OK();
 }
 }  // namespace ROCKSDB_NAMESPACE
-

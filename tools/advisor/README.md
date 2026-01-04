@@ -15,7 +15,7 @@ Experts share their wisdom as rules comprising of conditions and suggestions in 
 [rules.ini](https://github.com/facebook/rocksdb/blob/main/tools/advisor/advisor/rules.ini)).
 Users provide the Rocksdb configuration that they want to improve upon (as the
 familiar Rocksdb OPTIONS file —
-[example](https://github.com/facebook/rocksdb/blob/main/examples/rocksdb_option_file_example.ini))
+[example](https://github.com/facebook/rocksdb/blob/main/tools/advisor/test/input_files/rocksdb_option_file_example.ini))
 and the path of the file which contains Rocksdb logs and statistics.
 The [Advisor](https://github.com/facebook/rocksdb/blob/main/tools/advisor/advisor/rule_parser_example.py)
 creates appropriate DataSource objects (for Rocksdb
@@ -48,7 +48,7 @@ python3 -m advisor.rule_parser_example --rules_spec=advisor/rules.ini --rocksdb_
 
 Most important amongst all the input that the Advisor needs, are the rules
 spec and starting Rocksdb configuration. The configuration is provided as the
-familiar Rocksdb Options file (refer [example](https://github.com/facebook/rocksdb/blob/main/examples/rocksdb_option_file_example.ini)).
+familiar Rocksdb Options file (refer [example](https://github.com/facebook/rocksdb/blob/main/tools/advisor/test/input_files/rocksdb_option_file_example.ini)).
 The Rules spec is written in the INI format (more details in
 [rules.ini](https://github.com/facebook/rocksdb/blob/main/tools/advisor/advisor/rules.ini)).
 

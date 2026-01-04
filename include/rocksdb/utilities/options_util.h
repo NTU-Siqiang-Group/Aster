@@ -56,8 +56,7 @@ struct ConfigOptions;
 // ignore options that are from a newer version of the db, essentially for
 // forward compatibility.
 //
-// examples/options_file_example.cc demonstrates how to use this function
-// to open a RocksDB instance.
+// See the documentation for usage examples of loading options files.
 //
 // @return the function returns an OK status when it went successfully.  If
 //     the specified "dbpath" does not contain any option file, then a

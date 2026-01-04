@@ -39,7 +39,6 @@ echo "Compiling RocksDB..."
 cd /usr/local/rocksdb
 chown -R vagrant:vagrant /usr/local/rocksdb/
 sudo -u vagrant make static_lib
-cd examples/
+cd graph_test/
 sudo -u vagrant LD_LIBRARY_PATH=/usr/local/lib/ make all
-sudo -u vagrant LD_LIBRARY_PATH=/usr/local/lib/ ./c_simple_example
-
+sudo -u vagrant LD_LIBRARY_PATH=/usr/local/lib/ ./graph_example --load_mode=tiny

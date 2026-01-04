@@ -12,6 +12,7 @@ rocksdb.pc
 *.so
 *.so.*
 *_test
+!graph_test/
 *_bench
 *_stress
 *.out

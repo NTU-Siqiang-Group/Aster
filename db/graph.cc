@@ -734,9 +734,9 @@ Status RocksGraph::GetAllEdges(node_id_t src, Edges* edges) {
     read_options.iterate_upper_bound = &upper_key;
 
     std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(read_options));
-    int edge_count = 0;
+    //int edge_count = 0;
     for (it->Seek(start); it->Valid(); it->Next()) {
-      edge_count++;
+      //edge_count++;
       it->value();
       // decode_edges(edges,  it->value().ToString(), encoding_type_);
     }

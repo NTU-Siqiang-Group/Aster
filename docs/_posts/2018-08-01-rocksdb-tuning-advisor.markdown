@@ -18,7 +18,7 @@ Experts share their wisdom as rules comprising of conditions and suggestions in 
 [rules.ini](https://github.com/facebook/rocksdb/blob/main/tools/advisor/advisor/rules.ini)).
 Users provide the Rocksdb configuration that they want to improve upon (as the
 familiar Rocksdb OPTIONS file —
-[example](https://github.com/facebook/rocksdb/blob/main/examples/rocksdb_option_file_example.ini))
+[example](https://github.com/facebook/rocksdb/blob/main/tools/advisor/test/input_files/rocksdb_option_file_example.ini))
 and the path of the file which contains Rocksdb logs and statistics.
 The [Advisor](https://github.com/facebook/rocksdb/blob/main/tools/advisor/advisor/rule_parser_example.py)
 creates appropriate DataSource objects (for Rocksdb

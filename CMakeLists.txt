@@ -1589,9 +1589,9 @@ if(WITH_TOOLS)
     DEPENDS ${tool_deps})
 endif()
 
-option(WITH_EXAMPLES "build with examples" OFF)
+option(WITH_EXAMPLES "build with graph tests" OFF)
 if(WITH_EXAMPLES)
-  add_subdirectory(examples)
+  add_subdirectory(graph_test)
 endif()
 
 option(WITH_BENCHMARK "build benchmark tests" OFF)

@@ -14,7 +14,7 @@ and Space-Amplification-Factor (SAF). It has multi-threaded compactions,
 making it especially suitable for storing multiple terabytes of data in a
 single database.
 
-Start with example usage here: https://github.com/facebook/rocksdb/tree/main/examples
+Start with graph example usage here: https://github.com/facebook/rocksdb/tree/main/graph_test
 
 See the [github wiki](https://github.com/facebook/rocksdb/wiki) for more explanation.
 

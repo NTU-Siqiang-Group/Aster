@@ -1,7 +1,7 @@
 # This is a RocksDB option file.
 #
 # For detailed file format spec, please refer to the example file
-# in examples/rocksdb_option_file_example.ini
+# in tools/advisor/test/input_files/rocksdb_option_file_example.ini
 #
 
 [Version]

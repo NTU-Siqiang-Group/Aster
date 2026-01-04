@@ -122,14 +122,13 @@ class TransactionNotifier {
 // Provides BEGIN/COMMIT/ROLLBACK transactions.
 //
 // To use transactions, you must first create either an OptimisticTransactionDB
-// or a TransactionDB.  See examples/[optimistic_]transaction_example.cc for
-// more information.
+// or a TransactionDB.  See the transaction documentation for more information.
 //
 // To create a transaction, use [Optimistic]TransactionDB::BeginTransaction().
 //
 // It is up to the caller to synchronize access to this object.
 //
-// See examples/transaction_example.cc for some simple examples.
+// See the transaction documentation for more usage examples.
 //
 // TODO(agiardullo): Not yet implemented
 //  -PerfContext statistics

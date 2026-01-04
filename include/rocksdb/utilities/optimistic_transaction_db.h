@@ -19,7 +19,7 @@ class Transaction;
 
 // Database with Transaction support.
 //
-// See optimistic_transaction.h and examples/transaction_example.cc
+// See optimistic_transaction.h for usage notes.
 
 // Options to use when starting an Optimistic Transaction
 struct OptimisticTransactionOptions {
