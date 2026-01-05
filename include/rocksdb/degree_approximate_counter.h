@@ -103,7 +103,7 @@ class MorrisCounter {
   int exponent_bits = 3;
   int mantissa_bits = 5;
   std::random_device rd;
-  boost::mt19937 rand_gen;
+  std::mt19937 rand_gen;
 
   MorrisCounter(vertex_id_t n) : rand_gen(rd()) { counters.resize(n, 0); }
 
