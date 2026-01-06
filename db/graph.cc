@@ -304,10 +304,12 @@ node_id_t RocksGraph::random_walk(node_id_t start, float decay_factor) {
     }
     decode_edges(&edges, value, encoding_type_);
     if (edges.num_edges_out == 0) {
+      free_edges(&edges);
       return cur;
     }
     float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
     if (r < decay_factor) {
+      free_edges(&edges);
       return cur;
     }
     int idx = rand() % edges.num_edges_out;

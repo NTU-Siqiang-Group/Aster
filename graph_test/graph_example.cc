@@ -17,6 +17,7 @@ DEFINE_bool(enable_bloom_filter, true, "Enable bloom filter");
 DEFINE_bool(direct_io, false, "Enable direct IO for flush/compaction and reads");
 DEFINE_bool(reinit, true, "Destroy existing DB before running");
 DEFINE_bool(run_lookups, false, "Run random lookups after load");
+DEFINE_bool(test_sketch, false, "Evaluate accuracy of degree sketches");
 DEFINE_double(update_ratio, 0.5, "Update ratio for adaptive policy");
 DEFINE_double(powerlaw_alpha, 2.0, "Alpha for power-law generator");
 DEFINE_int32(update_policy, EDGE_UPDATE_ADAPTIVE, "Edge update policy");
@@ -94,6 +95,10 @@ int main(int argc, char* argv[]) {
             .count() /
         static_cast<double>(FLAGS_load_edges);
     std::cout << "put latency: " << load_latency << std::endl;
+  }
+
+  if(FLAGS_test_sketch){
+    tool.CompareDegreeFilterAccuracy(FLAGS_load_vertices, 10000);
   }
 
   if (!FLAGS_run_lookups) {

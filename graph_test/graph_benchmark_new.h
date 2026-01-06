@@ -754,9 +754,9 @@ class GraphBenchmarkTool {
     double mor_relative_error = 0;
     double cms_absolute_error = 0;
     double mor_absolute_error = 0;
-    std::cout << "Count Min Sketch Size: "
-              << graph_->GetDegreeFilterSize(FILTER_TYPE_CMS) << " Bytes."
-              << std::endl;
+    // std::cout << "Count Min Sketch Size: "
+    //           << graph_->GetDegreeFilterSize(FILTER_TYPE_CMS) << " Bytes."
+    //           << std::endl;
     std::cout << "Morris Counter Size: "
               << graph_->GetDegreeFilterSize(FILTER_TYPE_MORRIS) << " Bytes."
               << std::endl;
@@ -775,34 +775,36 @@ class GraphBenchmarkTool {
         std::cout << "get error: " << s.ToString() << std::endl;
         exit(0);
       }
-      int real_degree = edges.num_edges_out;
+      int real_degree = edges.num_edges_out + edges.num_edges_in;
       // cms_absolute_error += abs(
       //     real_degree - graph_->GetDegreeApproximate(from, FILTER_TYPE_CMS));
       // cms_relative_error += abs(real_degree - graph_->GetDegreeApproximate(
       //                                             from, FILTER_TYPE_CMS)) /
       //                       (double)real_degree;
-      // mor_absolute_error += abs(real_degree - graph_->GetDegreeApproximate(
-      //                                             from, FILTER_TYPE_MORRIS));
-      // mor_relative_error += abs(real_degree - graph_->GetDegreeApproximate(
-      //                                             from, FILTER_TYPE_MORRIS))
-      //                                             /
-      //                       (double)real_degree;
-      std::cout << from << " ||\t";
-      for (node_id_t i = 0; i < edges.num_edges_out; i++) {
-        std::cout << edges.nxts_out[i].nxt << "\t";
+      mor_absolute_error += abs(real_degree - graph_->GetDegreeApproximate(
+                                                  from));
+      if(real_degree!=0){
+        mor_relative_error += abs(real_degree - graph_->GetDegreeApproximate(
+                                                    from))
+                                                    /
+                              (double)real_degree;
       }
+      // std::cout << from << " ||\t";
+      // for (node_id_t i = 0; i < edges.num_edges_out; i++) {
+      //   std::cout << edges.nxts_out[i].nxt << "\t";
+      // }
     }
-    cms_relative_error = cms_relative_error / m;
+    //cms_relative_error = cms_relative_error / m;
     mor_relative_error = mor_relative_error / m;
-    cms_absolute_error = cms_absolute_error / m;
+    //cms_absolute_error = cms_absolute_error / m;
     mor_absolute_error = mor_absolute_error / m;
 
-    std::cout << "\nCount Min Sketch Relative Error: "
-              << cms_relative_error * 100 << "%." << std::endl;
-    std::cout << "Morris Counter Relative Error: " << mor_relative_error * 100
+    // std::cout << "\nCount Min Sketch Relative Error: "
+    //           << cms_relative_error * 100 << "%." << std::endl;
+    std::cout << "\nMorris Counter Relative Error: " << mor_relative_error * 100
               << "%." << std::endl;
-    std::cout << "Count Min Sketch Absolute Error: " << cms_absolute_error
-              << "." << std::endl;
+    // std::cout << "Count Min Sketch Absolute Error: " << cms_absolute_error
+    //           << "." << std::endl;
     std::cout << "Morris Counter Absolute Error: " << mor_absolute_error << "."
               << std::endl;
     return;

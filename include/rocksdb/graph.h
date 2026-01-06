@@ -188,6 +188,8 @@ void inline encode_edges(
 void inline decode_edges(
     Edges* edges, const std::string& value, int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
+  edges->nxts_out = nullptr;
+  edges->nxts_in = nullptr;
   edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
   edges->num_edges_in =
       *reinterpret_cast<const uint32_t*>(value.data() + sizeof(uint32_t));
@@ -238,6 +240,8 @@ void inline decode_edges(
 void inline free_edges(Edges* edges) {
   delete[] edges->nxts_out;
   delete[] edges->nxts_in;
+  edges->nxts_out = nullptr;
+  edges->nxts_in = nullptr;
 }
 
 void inline concatenate_properties(const std::vector<Property>& props,
