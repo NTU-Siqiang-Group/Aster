@@ -1,12 +1,15 @@
 #pragma once
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 using namespace std::chrono;
 
@@ -746,6 +749,187 @@ class GraphBenchmarkTool {
         std::cerr << "Error retrieving edges from vertex " << vertex1 << std::endl;
     }
 
+  }
+
+  struct EdgeOperation {
+    enum Type { kAdd, kDelete };
+    Type type;
+    node_id_t from;
+    node_id_t to;
+  };
+
+  struct EdgePairHash {
+    size_t operator()(const std::pair<node_id_t, node_id_t>& pair) const {
+      return std::hash<node_id_t>()(pair.first) ^
+             (std::hash<node_id_t>()(pair.second) << 1);
+    }
+  };
+
+  void EdgeInterfaceTest(node_id_t n, node_id_t m, bool mix_delete) {
+    if (n <= 0 || m <= 0) {
+      std::cout << "EdgeInterfaceTest skipped: invalid sizes." << std::endl;
+      return;
+    }
+    InitNodes(n);
+
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<node_id_t> dist(0, n - 1);
+
+    std::vector<std::pair<node_id_t, node_id_t>> edges;
+    edges.reserve(m);
+    std::unordered_set<std::pair<node_id_t, node_id_t>, EdgePairHash>
+        unique_edges;
+    while (edges.size() < static_cast<size_t>(m)) {
+      node_id_t from = dist(rng);
+      node_id_t to = dist(rng);
+      std::pair<node_id_t, node_id_t> edge(from, to);
+      if (unique_edges.insert(edge).second) {
+        edges.push_back(edge);
+      }
+    }
+
+    std::vector<EdgeOperation> ops;
+    ops.reserve(edges.size() + edges.size() / 5);
+    for (const auto& edge : edges) {
+      ops.push_back({EdgeOperation::kAdd, edge.first, edge.second});
+    }
+
+    if (mix_delete) {
+      std::vector<size_t> indices(edges.size());
+      for (size_t i = 0; i < edges.size(); ++i) {
+        indices[i] = i;
+      }
+      std::shuffle(indices.begin(), indices.end(), rng);
+      const size_t delete_count = edges.size() / 5;
+      for (size_t i = 0; i < delete_count; ++i) {
+        const auto& edge = edges[indices[i]];
+        ops.push_back({EdgeOperation::kDelete, edge.first, edge.second});
+      }
+    }
+
+    std::shuffle(ops.begin(), ops.end(), rng);
+
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>>
+        expected_out;
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_in;
+
+    auto apply_add = [&](node_id_t from, node_id_t to) {
+      expected_out[from].insert(to);
+      expected_in[to].insert(from);
+    };
+    auto apply_delete = [&](node_id_t from, node_id_t to) {
+      auto out_it = expected_out.find(from);
+      if (out_it != expected_out.end()) {
+        out_it->second.erase(to);
+      }
+      auto in_it = expected_in.find(to);
+      if (in_it != expected_in.end()) {
+        in_it->second.erase(from);
+      }
+    };
+
+    for (const auto& op : ops) {
+      Status s;
+      if (op.type == EdgeOperation::kAdd) {
+        s = graph_->AddEdge(op.from, op.to);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+        apply_add(op.from, op.to);
+        if (!is_directed_) {
+          s = graph_->AddEdge(op.to, op.from);
+          if (!s.ok()) {
+            std::cout << "add error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          apply_add(op.to, op.from);
+        }
+      } else {
+        s = graph_->DeleteEdge(op.from, op.to);
+        if (!s.ok()) {
+          std::cout << "delete error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+        apply_delete(op.from, op.to);
+        if (!is_directed_) {
+          s = graph_->DeleteEdge(op.to, op.from);
+          if (!s.ok()) {
+            std::cout << "delete error: " << s.ToString() << std::endl;
+            exit(0);
+          }
+          apply_delete(op.to, op.from);
+        }
+      }
+    }
+
+    size_t mismatch_nodes = 0;
+    size_t mismatch_edges = 0;
+    for (node_id_t node = 0; node < n; ++node) {
+      Edges edges_read;
+      Status s = graph_->GetAllEdges(node, &edges_read);
+      std::unordered_set<node_id_t> got_out;
+      std::unordered_set<node_id_t> got_in;
+      if (s.ok()) {
+        for (uint32_t i = 0; i < edges_read.num_edges_out; ++i) {
+          got_out.insert(edges_read.nxts_out[i].nxt);
+        }
+        for (uint32_t i = 0; i < edges_read.num_edges_in; ++i) {
+          got_in.insert(edges_read.nxts_in[i].nxt);
+        }
+        free_edges(&edges_read);
+      } else if (!s.IsNotFound()) {
+        std::cout << "get error: " << s.ToString() << std::endl;
+        exit(0);
+      }
+
+      const auto expected_out_it = expected_out.find(node);
+      const auto expected_in_it = expected_in.find(node);
+      const std::unordered_set<node_id_t> empty_set;
+      const auto& expected_out_set =
+          expected_out_it == expected_out.end() ? empty_set
+                                                : expected_out_it->second;
+      const auto& expected_in_set =
+          expected_in_it == expected_in.end() ? empty_set
+                                              : expected_in_it->second;
+
+      bool match = true;
+      if (got_out.size() != expected_out_set.size() ||
+          got_in.size() != expected_in_set.size()) {
+        match = false;
+      } else {
+        for (const auto& neighbor : expected_out_set) {
+          if (got_out.find(neighbor) == got_out.end()) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          for (const auto& neighbor : expected_in_set) {
+            if (got_in.find(neighbor) == got_in.end()) {
+              match = false;
+              break;
+            }
+          }
+        }
+      }
+      if (!match) {
+        mismatch_nodes++;
+        mismatch_edges += std::max(got_out.size(), expected_out_set.size()) +
+                          std::max(got_in.size(), expected_in_set.size());
+      }
+    }
+
+    std::cout << "EdgeInterfaceTest result: nodes=" << n
+              << " edges=" << m << " mix_delete=" << (mix_delete ? "true" : "false")
+              << " mismatched_nodes=" << mismatch_nodes
+              << " mismatch_edges=" << mismatch_edges << std::endl;
+    if (mismatch_nodes == 0) {
+      std::cout << "EdgeInterfaceTest: PASS" << std::endl;
+    } else {
+      std::cout << "EdgeInterfaceTest: FAIL" << std::endl;
+    }
   }
 
   void CompareDegreeFilterAccuracy(node_id_t n, node_id_t m) {

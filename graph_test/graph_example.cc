@@ -17,7 +17,11 @@ DEFINE_bool(enable_bloom_filter, true, "Enable bloom filter");
 DEFINE_bool(direct_io, false, "Enable direct IO for flush/compaction and reads");
 DEFINE_bool(reinit, true, "Destroy existing DB before running");
 DEFINE_bool(run_lookups, false, "Run random lookups after load");
-DEFINE_bool(test_sketch, false, "Evaluate accuracy of degree sketches");
+DEFINE_bool(run_sketch_test, false, "Evaluate accuracy of degree sketches");
+DEFINE_bool(run_edge_interface_test, false,
+            "Run AddEdge/GetAll/DeleteEdge verification test");
+DEFINE_bool(edge_test_mix_delete, false,
+            "Mix 20% deletes during edge interface test");
 DEFINE_double(update_ratio, 0.5, "Update ratio for adaptive policy");
 DEFINE_double(powerlaw_alpha, 2.0, "Alpha for power-law generator");
 DEFINE_int32(update_policy, EDGE_UPDATE_ADAPTIVE, "Edge update policy");
@@ -75,6 +79,12 @@ int main(int argc, char* argv[]) {
                                    FLAGS_reinit);
   tool.SetRatio(FLAGS_update_ratio, 1 - FLAGS_update_ratio);
 
+  if (FLAGS_run_edge_interface_test) {
+    tool.EdgeInterfaceTest(FLAGS_load_vertices, FLAGS_load_edges,
+                           FLAGS_edge_test_mix_delete);
+    return 0;
+  }
+
   if (FLAGS_load_mode == "tiny") {
     tool.TinyExample();
     return 0;
@@ -97,7 +107,7 @@ int main(int argc, char* argv[]) {
     std::cout << "put latency: " << load_latency << std::endl;
   }
 
-  if(FLAGS_test_sketch){
+  if(FLAGS_run_sketch_test){
     tool.CompareDegreeFilterAccuracy(FLAGS_load_vertices, 10000);
   }
 
