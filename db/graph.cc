@@ -34,16 +34,20 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
           existing_edges.nxts_out[pivot_ex++].nxt;
       continue;
     }
-    if (new_edges.nxts_out[pivot_new].nxt < 0 && !is_partial) {
-      delete_edges.push_back(-new_edges.nxts_out[pivot_new++].nxt);
-      continue;
+    if (existing_edges.nxts_out[pivot_ex].nxt < 0) {
+      //delete_edges.push_back(-existing_edges.nxts_out[pivot_ex].nxt);
+      if(!is_partial){
+        pivot_ex++;
+        continue;
+      }
     }
-    // for (auto delete_edge : delete_edges) {
-    //   if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
-    //     pivot_ex++;
-    //     continue;
-    //   }
-    // }
+    if (new_edges.nxts_out[pivot_new].nxt < 0) {
+      delete_edges.push_back(-new_edges.nxts_out[pivot_new].nxt);
+      if(!is_partial){
+        pivot_new++;
+        continue;
+      }
+    }
     if (existing_edges.nxts_out[pivot_ex].nxt ==
         new_edges.nxts_out[pivot_new].nxt) {
       pivot_ex++;
@@ -91,9 +95,19 @@ void inline MergeSortInEdges(const Edges& existing_edges,
           existing_edges.nxts_in[pivot_ex++].nxt;
       continue;
     }
-    if (new_edges.nxts_in[pivot_new].nxt < 0 && !is_partial) {
-      delete_edges.push_back(-new_edges.nxts_in[pivot_new++].nxt);
-      continue;
+    if (existing_edges.nxts_in[pivot_ex].nxt < 0) {
+      //delete_edges.push_back(-existing_edges.nxts_in[pivot_ex].nxt);
+      if(!is_partial){
+        pivot_ex++;
+        continue;
+      }
+    }
+    if (new_edges.nxts_in[pivot_new].nxt < 0) {
+      delete_edges.push_back(-new_edges.nxts_in[pivot_new].nxt);
+      if(!is_partial){
+        pivot_new++;
+        continue;
+      }
     }
     if (existing_edges.nxts_in[pivot_ex].nxt ==
         new_edges.nxts_in[pivot_new].nxt) {

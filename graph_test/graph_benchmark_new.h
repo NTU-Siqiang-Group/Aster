@@ -916,8 +916,31 @@ class GraphBenchmarkTool {
       }
       if (!match) {
         mismatch_nodes++;
-        mismatch_edges += std::max(got_out.size(), expected_out_set.size()) +
-                          std::max(got_in.size(), expected_in_set.size());
+        std::cout << "Mismatch node " << node << std::endl;
+        for (const auto& neighbor : expected_out_set) {
+          if (got_out.find(neighbor) == got_out.end()) {
+            mismatch_edges++;
+            std::cout << "  missing out -> " << neighbor << std::endl;
+          }
+        }
+        for (const auto& neighbor : got_out) {
+          if (expected_out_set.find(neighbor) == expected_out_set.end()) {
+            mismatch_edges++;
+            std::cout << "  extra out -> " << neighbor << std::endl;
+          }
+        }
+        for (const auto& neighbor : expected_in_set) {
+          if (got_in.find(neighbor) == got_in.end()) {
+            mismatch_edges++;
+            std::cout << "  missing in <- " << neighbor << std::endl;
+          }
+        }
+        for (const auto& neighbor : got_in) {
+          if (expected_in_set.find(neighbor) == expected_in_set.end()) {
+            mismatch_edges++;
+            std::cout << "  extra in <- " << neighbor << std::endl;
+          }
+        }
       }
     }
 

@@ -18,7 +18,7 @@ Our implementation is based on RocksDB and extends it with **RocksGraph**, a gra
 
 ### 1. Data Model & Storage Layout
 
-- **Vertex / edge identifiers**: `node_id_t` (`int64_t`).
+- **Vertex / edge identifiers**: Positive numbers in `node_id_t` (`int64_t`).
 - **Adjacency lists**:
   - Each vertex key maps to a value containing its sorted out-edges and in-edges (`Edges`).
   - Serialization handled by `encode_edges` / `decode_edges`.
