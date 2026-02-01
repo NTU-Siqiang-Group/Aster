@@ -360,7 +360,7 @@ class RocksGraph {
   double update_ratio_ = 0.5;
   double lookup_ratio_ = 0.5;
   double cache_miss_rate_ = 0.9;
-  std::string db_path = "/tmp/demo";
+  std::string db_path_ = "/tmp/demo";
   std::string meta_filename = "/GraphMeta.log";
 
   class AdjacentListMergeOp : public AssociativeMergeOperator {
@@ -397,15 +397,16 @@ class RocksGraph {
 
   RocksGraph(Options& options, int edge_update_policy = EDGE_UPDATE_ADAPTIVE,
              int encoding_type = ENCODING_TYPE_NONE,
-             bool auto_reinitialize = false)
+             bool auto_reinitialize = false, std::string db_path = "/tmp/demo")
       : n(0),
         m(0),
         encoding_type_(encoding_type),
         edge_update_policy_(edge_update_policy),
         auto_reinitialize_(auto_reinitialize),
+        db_path_(db_path),
         cms_out(),
         cms_in(),
-        mor() {
+        mor(){
     auto table_options =
         options.table_factory->GetOptions<rocksdb::BlockBasedTableOptions>();
     table_options->filter_policy.reset(
@@ -431,10 +432,10 @@ class RocksGraph {
     column_families.emplace_back("vprop_val", options);
     std::vector<ColumnFamilyHandle*> handles;
     if (auto_reinitialize_) {
-      DestroyDB(db_path, options);
+      DestroyDB(db_path_, options);
     } else {
       GraphMeta meta;
-      ReadMeta(db_path + meta_filename, meta);
+      ReadMeta(db_path_ + meta_filename, meta);
       n = meta.n;
       m = meta.m;
     }
@@ -450,7 +451,7 @@ class RocksGraph {
 
   ~RocksGraph() {
     GraphMeta meta{.n = n, .m = m};
-    WriteMeta(db_path + meta_filename, meta);
+    WriteMeta(db_path_ + meta_filename, meta);
     db_->DestroyColumnFamilyHandle(adj_cf_);
     db_->DestroyColumnFamilyHandle(edge_prop_cf_);
     db_->DestroyColumnFamilyHandle(vertex_prop_cf_);
