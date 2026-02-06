@@ -16,12 +16,14 @@ void inline MergeSortOutEdges(const Edges& existing_edges,
   while (pivot_ex < existing_edges.num_edges_out ||
          pivot_new < new_edges.num_edges_out) {
     bool is_deleted = false;
-    for (auto delete_edge : delete_edges) {
-      if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
-        pivot_ex++;
-        is_deleted = true;
-        mor->DecayCounter(vertex);
-        m--;
+    if(pivot_ex < existing_edges.num_edges_out){
+      for (auto delete_edge : delete_edges) {
+        if (delete_edge == existing_edges.nxts_out[pivot_ex].nxt) {
+          pivot_ex++;
+          is_deleted = true;
+          mor->DecayCounter(vertex);
+          m--;
+        }
       }
     }
     if (is_deleted) continue;
@@ -78,11 +80,13 @@ void inline MergeSortInEdges(const Edges& existing_edges,
   while (pivot_ex < existing_edges.num_edges_in ||
          pivot_new < new_edges.num_edges_in) {
     bool is_deleted = false;
-    for (auto delete_edge : delete_edges) {
-      if (delete_edge == existing_edges.nxts_in[pivot_ex].nxt) {
-        pivot_ex++;
-        is_deleted = true;
-        mor->DecayCounter(vertex);
+    if(pivot_ex < existing_edges.num_edges_in){
+      for (auto delete_edge : delete_edges) {
+        if (delete_edge == existing_edges.nxts_in[pivot_ex].nxt) {
+          pivot_ex++;
+          is_deleted = true;
+          mor->DecayCounter(vertex);
+        }
       }
     }
     if (is_deleted) continue;
@@ -299,7 +303,7 @@ bool inline InsertToEdgeList(Edge*& new_list, const Edge* cur_list,
       new_list[edge_count++].nxt = cur_list[pivot_ex++].nxt;
     }
   }
-  if (cur_list[cur_length - 1].nxt < insert_id || cur_length == 0) {
+  if (cur_length == 0 || cur_list[cur_length - 1].nxt < insert_id) {
     new_list[cur_length].nxt = insert_id;
   }
   return is_merge;

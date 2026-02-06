@@ -1,5 +1,6 @@
 #pragma once
 #include <fstream>
+#include <cstring>
 #include <iostream>
 #include <limits>
 
@@ -109,11 +110,20 @@ void inline encode_node_hash(VertexKey v, node_id_t edge, std::string* key) {
 }
 
 void inline decode_node(VertexKey* v, const std::string& key) {
-  *v = *reinterpret_cast<const VertexKey*>(key.data());
+  if (key.size() < sizeof(VertexKey)) {
+    v->id = 0;
+    return;
+  }
+  std::memcpy(v, key.data(), sizeof(VertexKey));
 }
 
 node_id_t inline decode_node(const std::string& key) {
-  return *reinterpret_cast<const node_id_t*>(key.data());
+  if (key.size() < sizeof(node_id_t)) {
+    return 0;
+  }
+  node_id_t id = 0;
+  std::memcpy(&id, key.data(), sizeof(node_id_t));
+  return id;
 }
 
 void inline encode_edge(const Edge* edge, std::string* value) {
@@ -439,7 +449,7 @@ class RocksGraph {
       n = meta.n;
       m = meta.m;
     }
-    Status s = DB::Open(options, db_path, column_families, &handles, &db_);
+    Status s = DB::Open(options, db_path_, column_families, &handles, &db_);
     if (!s.ok()) {
       std::cout << s.ToString() << std::endl;
       exit(1);
