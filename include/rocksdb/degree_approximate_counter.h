@@ -112,7 +112,7 @@ class MorrisCounter {
   ~MorrisCounter() {}
 
   void AddCounter(vertex_id_t v) {
-    while (static_cast<size_t>(v) > counters.size()) {
+    while (static_cast<size_t>(v) >= counters.size()) {
       vertex_id_t new_size = counters.size() * 2;
       counters.resize(new_size, 0);
     }
@@ -125,7 +125,7 @@ class MorrisCounter {
   }
 
   void DecayCounter(vertex_id_t v) {
-    if(static_cast<size_t>(v) > counters.size()) return;
+    if(static_cast<size_t>(v) >= counters.size()) return;
     int exponent = ExtractExponent(counters[v]);
     std::uniform_int_distribution<> dist(1, pow(2, exponent));
     if (dist(rand_gen) == 1 && counters[v]!= 0) {
@@ -146,7 +146,7 @@ class MorrisCounter {
   }
 
   int GetVertexCount(vertex_id_t v) {
-    if (static_cast<size_t>(v) > counters.size()) {
+    if (static_cast<size_t>(v) >= counters.size()) {
       return 0;
     }
     if(counters[v] == UCHAR_MAX) return INT_MAX;
