@@ -1,6 +1,7 @@
 #pragma once
 #include "rocksdb/db.h"
 #include "rocksdb/graph.h"
+#include "../third-party/csv-parser/single_include/csv.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -125,6 +126,47 @@ class GraphBenchmarkTool {
     }
   }
 
+  /**
+   * Load graph from CSV file.
+   * CSV format: each row contains two columns (from_node, to_node) representing an edge.
+   * The first row is treated as header and will be skipped.
+   *
+   * @param csv_file Path to the CSV file
+   */
+  void LoadGraphFromCSV(const std::string& csv_file) {
+    csv::CSVReader reader(csv_file);
+    Status s;
+
+    for (csv::CSVRow& row : reader) {
+      if (row.size() < 2) {
+        std::cout << "Invalid row: expected at least 2 columns" << std::endl;
+        continue;
+      }
+
+      node_id_t from = row[0].get<node_id_t>();
+      node_id_t to = row[1].get<node_id_t>();
+
+      if (is_directed_) {
+        s = graph_->AddEdge(from, to);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      } else {
+        s = graph_->AddEdge(from, to);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+        s = graph_->AddEdge(to, from);
+        if (!s.ok()) {
+          std::cout << "add error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      }
+    }
+  }
+
   void LoadRandomGraph(node_id_t n, node_id_t m){
     Status s;
     for(int i = 0; i < m; i++){
@@ -156,6 +198,53 @@ class GraphBenchmarkTool {
 
   void LoadRandomPowerGraph(node_id_t n, node_id_t m){
     return;
+  }
+
+  /**
+   * Load property graph from CSV file.
+   * CSV format:
+   * - For vertex properties: vertex_id, property_name, property_value
+   * - For edge properties: from_node, to_node, property_name, property_value
+   * The first row is treated as header and will be skipped.
+   * The function automatically detects the format based on the number of columns.
+   *
+   * @param csv_file Path to the CSV file
+   */
+  void LoadPropertyGraphFromCSV(const std::string& csv_file) {
+    csv::CSVReader reader(csv_file);
+    Status s;
+
+    for (csv::CSVRow& row : reader) {
+      if (row.size() == 3) {
+        // Vertex property format: vertex_id, property_name, property_value
+        node_id_t vertex_id = row[0].get<node_id_t>();
+        std::string prop_name = row[1].get<std::string>();
+        std::string prop_value = row[2].get<std::string>();
+
+        Property prop{prop_name, prop_value};
+        s = graph_->AddVertexProperty(vertex_id, prop);
+        if (!s.ok()) {
+          std::cout << "add vertex property error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      } else if (row.size() == 4) {
+        // Edge property format: from_node, to_node, property_name, property_value
+        node_id_t from = row[0].get<node_id_t>();
+        node_id_t to = row[1].get<node_id_t>();
+        std::string prop_name = row[2].get<std::string>();
+        std::string prop_value = row[3].get<std::string>();
+
+        Property prop{prop_name, prop_value};
+        s = graph_->AddEdgeProperty(from, to, prop);
+        if (!s.ok()) {
+          std::cout << "add edge property error: " << s.ToString() << std::endl;
+          exit(0);
+        }
+      } else {
+        std::cout << "Invalid row: expected 3 columns (vertex property) or 4 columns (edge property)" << std::endl;
+        continue;
+      }
+    }
   }
 
   void Execute(const std::string& workload_file) {

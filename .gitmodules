@@ -1,0 +1,6 @@
+[submodule "third-party/csv-parser"]
+	path = third-party/csv-parser
+	url = https://github.com/vincentlaucsb/csv-parser.git
+[submodule "third-party/GraphDatasets"]
+	path = third-party/GraphDatasets
+	url = https://github.com/WittenYeh/GraphDatasets.git
