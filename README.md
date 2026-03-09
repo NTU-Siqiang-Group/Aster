@@ -83,6 +83,7 @@ Relevant code:
 - `CountVertex()` / `CountEdge()`
 
 **Bulk/utility**
+- `AddVertexWithEdges(node_id_t id, std::vector<node_id_t>& out_neighbors, std::vector<node_id_t>& in_neighbors)` — Atomically creates a new vertex with its full adjacency list in a single `WriteBatch`. This API assumes the vertex does not already exist (a warning is emitted via Morris Counter if it likely does). It is **unidirectional**: only the new vertex's own adjacency list is written; reverse edges on neighbors are **not** added automatically. Users who need bidirectional edges should call `AddEdge` for the reverse side.
 - `AddEdges(node_id_t from, std::vector<node_id_t>& tos, std::vector<node_id_t>& froms)`
 - `AddVertexForBulkLoad()`
 
@@ -147,6 +148,11 @@ All of the following are implemented in `graph_benchmark_new.h`:
 - **TradeOffTest**: segmented build with read/write timing + LSM stats.
 - **RunDegreeFilterBenchmark**: CMS/Morris size and accuracy comparisons.
 - **CompareDegreeFilterAccuracy**: sampled error statistics for estimators.
+- **EdgeInterfaceTest**: verifies AddEdge / GetAllEdges / DeleteEdge correctness
+  with randomized edges and optional 20% deletes (`--run_edge_interface_test`, `--edge_test_mix_delete`).
+- **AddVertexWithEdgesTest**: verifies `AddVertexWithEdges` correctness — each vertex
+  stores exactly the edges it was given, with no implicit reverse-edge side effects
+  (`--run_add_vertex_with_edges_test`).
 - **DeleteTest**: edge deletion behavior (directed/undirected).
 - **PropertyTest**: edge property write/read validation.
 - **VertexPropertyTest**: vertex property write + reverse lookup checks.

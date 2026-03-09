@@ -999,33 +999,16 @@ class GraphBenchmarkTool {
       }
     }
 
-    // Compute expected state accounting for Put-overwrite semantics.
-    // AddVertexWithEdges(v, out, in) does a Put that sets v's adjacency
-    // to exactly (out, in), overwriting prior data. Then it adds reverse
-    // edges to neighbors via Merge (lazy) or read-modify-write Put (eager).
-    // Since vertices are processed in order 0..n-1, vertex v's final state is:
-    //   expected_out[v] = all_out[v] ∪ {w : w > v, v ∈ all_in[w]}
-    //   expected_in[v]  = all_in[v]  ∪ {w : w > v, v ∈ all_out[w]}
+    // Expected state: each vertex stores exactly the edges it was given.
+    // AddVertexWithEdges is unidirectional — it does not add reverse edges
+    // to neighbors. Bidirectional behavior is user-managed by calling the
+    // API for both directions.
     std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_out;
     std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_in;
 
     for (node_id_t v = 0; v < n; ++v) {
-      // Base: vertex's own Put data
       for (auto nb : all_out[v]) expected_out[v].insert(nb);
       for (auto nb : all_in[v]) expected_in[v].insert(nb);
-    }
-    // Add reverse edges only from vertices processed AFTER the target
-    for (node_id_t w = 0; w < n; ++w) {
-      for (auto nb : all_out[w]) {
-        // w has out-edge to nb, so nb gets in-edge from w (reverse)
-        // Only survives if w > nb (processed after nb's own Put)
-        if (w > nb) expected_in[nb].insert(w);
-      }
-      for (auto nb : all_in[w]) {
-        // w has in-edge from nb, so nb gets out-edge to w (reverse)
-        // Only survives if w > nb (processed after nb's own Put)
-        if (w > nb) expected_out[nb].insert(w);
-      }
     }
 
     // Verify all vertices
