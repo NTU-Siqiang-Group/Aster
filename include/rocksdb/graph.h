@@ -479,6 +479,9 @@ class RocksGraph {
   std::pair<std::string, std::string> AddEdges(node_id_t from,
                                                std::vector<node_id_t>& tos,
                                                std::vector<node_id_t>& froms);
+  Status AddVertexWithEdges(node_id_t id,
+                            std::vector<node_id_t>& out_neighbors,
+                            std::vector<node_id_t>& in_neighbors);
   DB* get_raw_db() { return db_; }
   Status DeleteEdge(node_id_t from, node_id_t to);
   Status GetAllEdges(node_id_t src, Edges* edges);

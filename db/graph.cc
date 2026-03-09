@@ -1,4 +1,7 @@
+#include <algorithm>
+
 #include "rocksdb/graph.h"
+#include "rocksdb/write_batch.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -614,6 +617,134 @@ std::pair<std::string, std::string> RocksGraph::AddEdges(
   encode_edges(&new_edges, &new_value, encoding_type_);
   free_edges(&new_edges);
   return std::make_pair(key_out, new_value);
+}
+
+Status RocksGraph::AddVertexWithEdges(node_id_t id,
+                                      std::vector<node_id_t>& out_neighbors,
+                                      std::vector<node_id_t>& in_neighbors) {
+  // Sort and deduplicate edge lists
+  std::sort(out_neighbors.begin(), out_neighbors.end());
+  out_neighbors.erase(std::unique(out_neighbors.begin(), out_neighbors.end()),
+                      out_neighbors.end());
+  std::sort(in_neighbors.begin(), in_neighbors.end());
+  in_neighbors.erase(std::unique(in_neighbors.begin(), in_neighbors.end()),
+                     in_neighbors.end());
+
+  // Build the full adjacency list for this vertex
+  Edges edges;
+  edges.num_edges_out = static_cast<uint32_t>(out_neighbors.size());
+  edges.num_edges_in = static_cast<uint32_t>(in_neighbors.size());
+  edges.nxts_out = new Edge[edges.num_edges_out];
+  edges.nxts_in = new Edge[edges.num_edges_in];
+  for (uint32_t i = 0; i < edges.num_edges_out; i++) {
+    edges.nxts_out[i].nxt = out_neighbors[i];
+  }
+  for (uint32_t i = 0; i < edges.num_edges_in; i++) {
+    edges.nxts_in[i].nxt = in_neighbors[i];
+  }
+
+  VertexKey v{.id = id};
+  std::string key, value;
+  encode_node(v, &key);
+  encode_edges(&edges, &value, encoding_type_);
+  free_edges(&edges);
+
+  WriteBatch batch;
+
+  // Write the vertex adjacency list as a single entry
+  batch.Put(adj_cf_, key, value);
+
+  // Initialize property column families
+  batch.Put(edge_prop_cf_, key, "");
+  batch.Put(vertex_prop_cf_, key, "");
+
+  // Update reverse edges for each out-neighbor: append id to their in-edge list
+  for (auto to : out_neighbors) {
+    VertexKey v_nb{.id = to};
+    std::string nb_key, nb_val;
+    encode_node(v_nb, &nb_key);
+
+    if (edge_update_policy_ == EDGE_UPDATE_EAGER) {
+      Edges existing{};
+      Status s = GetAllEdges(to, &existing);
+      if (!s.ok() && !s.IsNotFound()) {
+        return s;
+      }
+      Edges updated;
+      updated.num_edges_out = existing.num_edges_out;
+      updated.nxts_out = new Edge[existing.num_edges_out];
+      if (existing.num_edges_out > 0) {
+        memcpy(updated.nxts_out, existing.nxts_out,
+               existing.num_edges_out * sizeof(Edge));
+      }
+      InsertToEdgeList(updated.nxts_in, existing.nxts_in,
+                       existing.num_edges_in, id);
+      updated.num_edges_in = existing.num_edges_in + 1;
+      encode_edges(&updated, &nb_val, encoding_type_);
+      free_edges(&existing);
+      free_edges(&updated);
+      batch.Put(adj_cf_, nb_key, nb_val);
+    } else {
+      // Lazy / adaptive: single merge operand
+      Edges e{.num_edges_out = 0, .num_edges_in = 1};
+      e.nxts_in = new Edge[1];
+      e.nxts_in[0].nxt = id;
+      encode_edges(&e, &nb_val, encoding_type_);
+      free_edges(&e);
+      batch.Merge(adj_cf_, nb_key, nb_val);
+    }
+  }
+
+  // Update reverse edges for each in-neighbor: append id to their out-edge list
+  for (auto from : in_neighbors) {
+    VertexKey v_nb{.id = from};
+    std::string nb_key, nb_val;
+    encode_node(v_nb, &nb_key);
+
+    if (edge_update_policy_ == EDGE_UPDATE_EAGER) {
+      Edges existing{};
+      Status s = GetAllEdges(from, &existing);
+      if (!s.ok() && !s.IsNotFound()) {
+        return s;
+      }
+      Edges updated;
+      updated.num_edges_in = existing.num_edges_in;
+      updated.nxts_in = new Edge[existing.num_edges_in];
+      if (existing.num_edges_in > 0) {
+        memcpy(updated.nxts_in, existing.nxts_in,
+               existing.num_edges_in * sizeof(Edge));
+      }
+      InsertToEdgeList(updated.nxts_out, existing.nxts_out,
+                       existing.num_edges_out, id);
+      updated.num_edges_out = existing.num_edges_out + 1;
+      encode_edges(&updated, &nb_val, encoding_type_);
+      free_edges(&existing);
+      free_edges(&updated);
+      batch.Put(adj_cf_, nb_key, nb_val);
+    } else {
+      // Lazy / adaptive: single merge operand
+      Edges e{.num_edges_out = 1, .num_edges_in = 0};
+      e.nxts_out = new Edge[1];
+      e.nxts_out[0].nxt = id;
+      encode_edges(&e, &nb_val, encoding_type_);
+      free_edges(&e);
+      batch.Merge(adj_cf_, nb_key, nb_val);
+    }
+  }
+
+  // Update counters
+  n++;
+  m += static_cast<node_id_t>(out_neighbors.size());
+  for (uint32_t i = 0; i < out_neighbors.size(); i++) {
+    mor.AddCounter(id);
+    mor.AddCounter(out_neighbors[i]);
+  }
+  for (uint32_t i = 0; i < in_neighbors.size(); i++) {
+    mor.AddCounter(id);
+    mor.AddCounter(in_neighbors[i]);
+  }
+
+  return db_->Write(WriteOptions(), &batch);
 }
 
 Status RocksGraph::DeleteEdge(node_id_t from, node_id_t to) {

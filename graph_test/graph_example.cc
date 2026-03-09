@@ -20,6 +20,8 @@ DEFINE_bool(run_lookups, false, "Run random lookups after load");
 DEFINE_bool(run_sketch_test, false, "Evaluate accuracy of degree sketches");
 DEFINE_bool(run_edge_interface_test, false,
             "Run AddEdge/GetAll/DeleteEdge verification test");
+DEFINE_bool(run_add_vertex_with_edges_test, false,
+            "Run AddVertexWithEdges verification test");
 DEFINE_bool(edge_test_mix_delete, false,
             "Mix 20% deletes during edge interface test");
 DEFINE_double(update_ratio, 0.5, "Update ratio for adaptive policy");
@@ -82,6 +84,11 @@ int main(int argc, char* argv[]) {
   if (FLAGS_run_edge_interface_test) {
     tool.EdgeInterfaceTest(FLAGS_load_vertices, FLAGS_load_edges,
                            FLAGS_edge_test_mix_delete);
+    return 0;
+  }
+
+  if (FLAGS_run_add_vertex_with_edges_test) {
+    tool.AddVertexWithEdgesTest(FLAGS_load_vertices, FLAGS_load_edges);
     return 0;
   }
 

@@ -955,6 +955,183 @@ class GraphBenchmarkTool {
     }
   }
 
+  void AddVertexWithEdgesTest(node_id_t n, node_id_t m) {
+    if (n <= 1 || m <= 0) {
+      std::cout << "AddVertexWithEdgesTest skipped: invalid sizes." << std::endl;
+      return;
+    }
+    InitNodes(n);
+
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<node_id_t> dist(0, n - 1);
+
+    // Determine edges per vertex, capped at n-1
+    node_id_t edges_per_vertex = std::min(m / n, n - 1);
+    if (edges_per_vertex <= 0) edges_per_vertex = 1;
+
+    // Pre-generate edge lists for all vertices
+    std::vector<std::vector<node_id_t>> all_out(n);
+    std::vector<std::vector<node_id_t>> all_in(n);
+    for (node_id_t v = 0; v < n; ++v) {
+      std::unordered_set<node_id_t> out_set;
+      while (static_cast<node_id_t>(out_set.size()) < edges_per_vertex) {
+        node_id_t nb = dist(rng);
+        if (nb != v) out_set.insert(nb);
+      }
+      std::unordered_set<node_id_t> in_set;
+      node_id_t in_count = std::max<node_id_t>(1, edges_per_vertex / 2);
+      while (static_cast<node_id_t>(in_set.size()) < in_count) {
+        node_id_t nb = dist(rng);
+        if (nb != v) in_set.insert(nb);
+      }
+      all_out[v].assign(out_set.begin(), out_set.end());
+      all_in[v].assign(in_set.begin(), in_set.end());
+    }
+
+    // Call AddVertexWithEdges for each vertex in order 0..n-1
+    for (node_id_t v = 0; v < n; ++v) {
+      Status s = graph_->AddVertexWithEdges(v, all_out[v], all_in[v]);
+      if (!s.ok()) {
+        std::cout << "AddVertexWithEdges error for vertex " << v << ": "
+                  << s.ToString() << std::endl;
+        exit(0);
+      }
+    }
+
+    // Compute expected state accounting for Put-overwrite semantics.
+    // AddVertexWithEdges(v, out, in) does a Put that sets v's adjacency
+    // to exactly (out, in), overwriting prior data. Then it adds reverse
+    // edges to neighbors via Merge (lazy) or read-modify-write Put (eager).
+    // Since vertices are processed in order 0..n-1, vertex v's final state is:
+    //   expected_out[v] = all_out[v] ∪ {w : w > v, v ∈ all_in[w]}
+    //   expected_in[v]  = all_in[v]  ∪ {w : w > v, v ∈ all_out[w]}
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_out;
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_in;
+
+    for (node_id_t v = 0; v < n; ++v) {
+      // Base: vertex's own Put data
+      for (auto nb : all_out[v]) expected_out[v].insert(nb);
+      for (auto nb : all_in[v]) expected_in[v].insert(nb);
+    }
+    // Add reverse edges only from vertices processed AFTER the target
+    for (node_id_t w = 0; w < n; ++w) {
+      for (auto nb : all_out[w]) {
+        // w has out-edge to nb, so nb gets in-edge from w (reverse)
+        // Only survives if w > nb (processed after nb's own Put)
+        if (w > nb) expected_in[nb].insert(w);
+      }
+      for (auto nb : all_in[w]) {
+        // w has in-edge from nb, so nb gets out-edge to w (reverse)
+        // Only survives if w > nb (processed after nb's own Put)
+        if (w > nb) expected_out[nb].insert(w);
+      }
+    }
+
+    // Verify all vertices
+    size_t mismatch_nodes = 0;
+    size_t mismatch_edges = 0;
+    for (node_id_t node = 0; node < n; ++node) {
+      Edges edges_read;
+      Status s = graph_->GetAllEdges(node, &edges_read);
+      std::unordered_set<node_id_t> got_out;
+      std::unordered_set<node_id_t> got_in;
+      if (s.ok()) {
+        for (uint32_t i = 0; i < edges_read.num_edges_out; ++i) {
+          got_out.insert(edges_read.nxts_out[i].nxt);
+        }
+        for (uint32_t i = 0; i < edges_read.num_edges_in; ++i) {
+          got_in.insert(edges_read.nxts_in[i].nxt);
+        }
+        free_edges(&edges_read);
+      } else if (!s.IsNotFound()) {
+        std::cout << "get error: " << s.ToString() << std::endl;
+        exit(0);
+      }
+
+      const auto& expected_out_set = expected_out[node];
+      const auto& expected_in_set = expected_in[node];
+
+      bool match = true;
+      if (got_out.size() != expected_out_set.size() ||
+          got_in.size() != expected_in_set.size()) {
+        match = false;
+      } else {
+        for (const auto& neighbor : expected_out_set) {
+          if (got_out.find(neighbor) == got_out.end()) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          for (const auto& neighbor : expected_in_set) {
+            if (got_in.find(neighbor) == got_in.end()) {
+              match = false;
+              break;
+            }
+          }
+        }
+      }
+      if (!match) {
+        mismatch_nodes++;
+        if (mismatch_nodes <= 10) {
+          std::cout << "Mismatch node " << node
+                    << " (out: got=" << got_out.size()
+                    << " exp=" << expected_out_set.size()
+                    << ", in: got=" << got_in.size()
+                    << " exp=" << expected_in_set.size() << ")" << std::endl;
+          for (const auto& neighbor : expected_out_set) {
+            if (got_out.find(neighbor) == got_out.end()) {
+              mismatch_edges++;
+              std::cout << "  missing out -> " << neighbor << std::endl;
+            }
+          }
+          for (const auto& neighbor : got_out) {
+            if (expected_out_set.find(neighbor) == expected_out_set.end()) {
+              mismatch_edges++;
+              std::cout << "  extra out -> " << neighbor << std::endl;
+            }
+          }
+          for (const auto& neighbor : expected_in_set) {
+            if (got_in.find(neighbor) == got_in.end()) {
+              mismatch_edges++;
+              std::cout << "  missing in <- " << neighbor << std::endl;
+            }
+          }
+          for (const auto& neighbor : got_in) {
+            if (expected_in_set.find(neighbor) == expected_in_set.end()) {
+              mismatch_edges++;
+              std::cout << "  extra in <- " << neighbor << std::endl;
+            }
+          }
+        } else {
+          for (const auto& neighbor : expected_out_set) {
+            if (got_out.find(neighbor) == got_out.end()) mismatch_edges++;
+          }
+          for (const auto& neighbor : got_out) {
+            if (expected_out_set.find(neighbor) == expected_out_set.end()) mismatch_edges++;
+          }
+          for (const auto& neighbor : expected_in_set) {
+            if (got_in.find(neighbor) == got_in.end()) mismatch_edges++;
+          }
+          for (const auto& neighbor : got_in) {
+            if (expected_in_set.find(neighbor) == expected_in_set.end()) mismatch_edges++;
+          }
+        }
+      }
+    }
+
+    std::cout << "AddVertexWithEdgesTest result: nodes=" << n
+              << " edges_per_vertex=" << edges_per_vertex
+              << " mismatched_nodes=" << mismatch_nodes
+              << " mismatch_edges=" << mismatch_edges << std::endl;
+    if (mismatch_nodes == 0) {
+      std::cout << "AddVertexWithEdgesTest: PASS" << std::endl;
+    } else {
+      std::cout << "AddVertexWithEdgesTest: FAIL" << std::endl;
+    }
+  }
+
   void CompareDegreeFilterAccuracy(node_id_t n, node_id_t m) {
     Status s;
     double cms_relative_error = 0;
