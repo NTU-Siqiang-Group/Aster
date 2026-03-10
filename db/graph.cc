@@ -864,12 +864,9 @@ node_id_t RocksGraph::GetOutDegree(node_id_t src) {
   std::string key;
   encode_node(v, &key);
   std::string value;
-  db_->Get(ReadOptions(), adj_cf_, key, &value);
-  Edges edges;
-  decode_edges(&edges, value, encoding_type_);
-  node_id_t result = edges.num_edges_out;
-  free_edges(&edges);
-  return result;
+  Status s = db_->Get(ReadOptions(), adj_cf_, key, &value);
+  if (!s.ok() || value.size() < sizeof(uint32_t)) return 0;
+  return *reinterpret_cast<const uint32_t*>(value.data());
 }
 
 node_id_t RocksGraph::GetInDegree(node_id_t src) {
@@ -877,12 +874,9 @@ node_id_t RocksGraph::GetInDegree(node_id_t src) {
   std::string key;
   encode_node(v, &key);
   std::string value;
-  db_->Get(ReadOptions(), adj_cf_, key, &value);
-  Edges edges;
-  decode_edges(&edges, value, encoding_type_);
-  node_id_t result = edges.num_edges_in;
-  free_edges(&edges);
-  return result;
+  Status s = db_->Get(ReadOptions(), adj_cf_, key, &value);
+  if (!s.ok() || value.size() < 2 * sizeof(uint32_t)) return 0;
+  return *reinterpret_cast<const uint32_t*>(value.data() + sizeof(uint32_t));
 }
 
 node_id_t RocksGraph::GetDegreeApproximate(node_id_t src,

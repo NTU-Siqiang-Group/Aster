@@ -1225,6 +1225,152 @@ class GraphBenchmarkTool {
     graph_->SetRatio(update_ratio, lookup_ratio);
   }
 
+  void MorrisCounterTest() {
+    std::cout << "=== MorrisCounterTest ===" << std::endl;
+    bool pass = true;
+
+    // Test vertices with varying increment counts
+    struct TestCase {
+      vertex_id_t vertex;
+      int increments;
+      double low_factor;   // minimum acceptable ratio (estimated / actual)
+      double high_factor;  // maximum acceptable ratio
+    };
+
+    std::vector<TestCase> cases = {
+        {0, 10, 0.1, 3.0},
+        {1, 50, 0.3, 2.5},
+        {2, 100, 0.3, 2.5},
+        {3, 500, 0.4, 2.0},
+        {4, 1000, 0.4, 2.0},
+        {5, 5000, 0.5, 2.0},
+    };
+
+    MorrisCounter mc(10);
+
+    for (auto& tc : cases) {
+      for (int i = 0; i < tc.increments; i++) {
+        mc.AddCounter(tc.vertex);
+      }
+      int est = mc.GetVertexCount(tc.vertex);
+      double ratio = (tc.increments > 0) ? static_cast<double>(est) / tc.increments : 1.0;
+      bool ok = (ratio >= tc.low_factor && ratio <= tc.high_factor);
+      std::cout << "  vertex=" << tc.vertex
+                << " actual=" << tc.increments
+                << " estimated=" << est
+                << " ratio=" << ratio
+                << (ok ? " OK" : " OUT_OF_RANGE") << std::endl;
+      if (!ok) pass = false;
+    }
+
+    // Test that GetVertexCount returns 0 for unseen vertex
+    int unseen = mc.GetVertexCount(9999);
+    if (unseen != 0) {
+      std::cout << "  Unseen vertex count should be 0, got " << unseen << std::endl;
+      pass = false;
+    }
+
+    // Test DecayCounter: decay a counter and verify it doesn't increase
+    vertex_id_t decay_v = 4;  // vertex with 1000 increments
+    int before_decay = mc.GetVertexCount(decay_v);
+    for (int i = 0; i < 500; i++) {
+      mc.DecayCounter(decay_v);
+    }
+    int after_decay = mc.GetVertexCount(decay_v);
+    if (after_decay > before_decay) {
+      std::cout << "  DecayCounter increased count from " << before_decay
+                << " to " << after_decay << std::endl;
+      pass = false;
+    } else {
+      std::cout << "  DecayCounter: before=" << before_decay
+                << " after=" << after_decay << " OK" << std::endl;
+    }
+
+    if (pass) {
+      std::cout << "MorrisCounterTest: PASS" << std::endl;
+    } else {
+      std::cout << "MorrisCounterTest: FAIL" << std::endl;
+    }
+  }
+
+  void DegreeQueryTest() {
+    std::cout << "=== DegreeQueryTest ===" << std::endl;
+    bool passed = true;
+
+    // Insert edges: 0->{1,2,3}, 1->{0,2}
+    graph_->AddEdge(0, 1);
+    graph_->AddEdge(0, 2);
+    graph_->AddEdge(0, 3);
+    graph_->AddEdge(1, 0);
+    graph_->AddEdge(1, 2);
+
+    // Vertex 0: out=3, in=1 (from edge 1->0)
+    node_id_t out0 = graph_->GetOutDegree(0);
+    node_id_t in0 = graph_->GetInDegree(0);
+    if (out0 != 3) {
+      std::cout << "  FAIL: GetOutDegree(0) expected 3, got " << out0 << std::endl;
+      passed = false;
+    }
+    if (in0 != 1) {
+      std::cout << "  FAIL: GetInDegree(0) expected 1, got " << in0 << std::endl;
+      passed = false;
+    }
+
+    // Vertex 1: out=2, in=1 (from edge 0->1)
+    node_id_t out1 = graph_->GetOutDegree(1);
+    node_id_t in1 = graph_->GetInDegree(1);
+    if (out1 != 2) {
+      std::cout << "  FAIL: GetOutDegree(1) expected 2, got " << out1 << std::endl;
+      passed = false;
+    }
+    if (in1 != 1) {
+      std::cout << "  FAIL: GetInDegree(1) expected 1, got " << in1 << std::endl;
+      passed = false;
+    }
+
+    // Vertex 2: out=0, in=2 (from edges 0->2, 1->2)
+    node_id_t out2 = graph_->GetOutDegree(2);
+    node_id_t in2 = graph_->GetInDegree(2);
+    if (out2 != 0) {
+      std::cout << "  FAIL: GetOutDegree(2) expected 0, got " << out2 << std::endl;
+      passed = false;
+    }
+    if (in2 != 2) {
+      std::cout << "  FAIL: GetInDegree(2) expected 2, got " << in2 << std::endl;
+      passed = false;
+    }
+
+    // Vertex 3: out=0, in=1 (from edge 0->3)
+    node_id_t out3 = graph_->GetOutDegree(3);
+    node_id_t in3 = graph_->GetInDegree(3);
+    if (out3 != 0) {
+      std::cout << "  FAIL: GetOutDegree(3) expected 0, got " << out3 << std::endl;
+      passed = false;
+    }
+    if (in3 != 1) {
+      std::cout << "  FAIL: GetInDegree(3) expected 1, got " << in3 << std::endl;
+      passed = false;
+    }
+
+    // Non-existent vertex should return 0
+    node_id_t out999 = graph_->GetOutDegree(999999);
+    node_id_t in999 = graph_->GetInDegree(999999);
+    if (out999 != 0) {
+      std::cout << "  FAIL: GetOutDegree(999999) expected 0, got " << out999 << std::endl;
+      passed = false;
+    }
+    if (in999 != 0) {
+      std::cout << "  FAIL: GetInDegree(999999) expected 0, got " << in999 << std::endl;
+      passed = false;
+    }
+
+    if (passed) {
+      std::cout << "DegreeQueryTest: PASS" << std::endl;
+    } else {
+      std::cout << "DegreeQueryTest: FAIL" << std::endl;
+    }
+  }
+
  private:
   RocksGraph* graph_;
   GraphBenchProfiler profiler_;

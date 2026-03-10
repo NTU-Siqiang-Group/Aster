@@ -118,7 +118,7 @@ class MorrisCounter {
     }
     if(counters[v] == UCHAR_MAX) return;
     int exponent = ExtractExponent(counters[v]);
-    std::uniform_int_distribution<> dist(1, pow(2, exponent));
+    std::uniform_int_distribution<> dist(1, 1 << exponent);
     if (dist(rand_gen) == 1) {
       counters[v]++;
     }
@@ -127,7 +127,7 @@ class MorrisCounter {
   void DecayCounter(vertex_id_t v) {
     if(static_cast<size_t>(v) >= counters.size()) return;
     int exponent = ExtractExponent(counters[v]);
-    std::uniform_int_distribution<> dist(1, pow(2, exponent));
+    std::uniform_int_distribution<> dist(1, 1 << exponent);
     if (dist(rand_gen) == 1 && counters[v]!= 0) {
       counters[v]--;
     }
@@ -152,8 +152,8 @@ class MorrisCounter {
     if(counters[v] == UCHAR_MAX) return INT_MAX;
     int exponent = ExtractExponent(counters[v]);
     int mantissa = ExtractMantissa(counters[v]);
-    return (pow(2, exponent) - 1) * pow(2, mantissa_bits) +
-           pow(2, exponent) * mantissa;
+    return ((1 << exponent) - 1) * (1 << mantissa_bits) +
+           (1 << exponent) * mantissa;
   }
 
   size_t CalcMemoryUsage(){
