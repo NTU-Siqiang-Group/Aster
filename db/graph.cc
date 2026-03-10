@@ -144,8 +144,8 @@ bool RocksGraph::AdjacentListMergeOp::Merge(const Slice& key,
     }
   }
   Edges new_edges, existing_edges, merged_edges;
-  decode_edges(&new_edges, value.ToString(), encoding_type_);
-  decode_edges(&existing_edges, existing_value->ToString(), encoding_type_);
+  decode_edges(&new_edges, value.data(), value.size(), encoding_type_);
+  decode_edges(&existing_edges, existing_value->data(), existing_value->size(), encoding_type_);
   merged_edges.num_edges_out =
       existing_edges.num_edges_out + new_edges.num_edges_out;
   merged_edges.num_edges_in =
@@ -175,8 +175,8 @@ bool RocksGraph::AdjacentListMergeOp::PartialMerge(const Slice& key,
     }
   }
   Edges new_edges, existing_edges, merged_edges;
-  decode_edges(&new_edges, value.ToString(), encoding_type_);
-  decode_edges(&existing_edges, existing_value.ToString(), encoding_type_);
+  decode_edges(&new_edges, value.data(), value.size(), encoding_type_);
+  decode_edges(&existing_edges, existing_value.data(), existing_value.size(), encoding_type_);
   merged_edges.num_edges_out =
       existing_edges.num_edges_out + new_edges.num_edges_out;
   merged_edges.num_edges_in =

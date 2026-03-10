@@ -657,15 +657,16 @@ class bit_vector_builder : boost::noncopyable {
     }
   }
 
-  inline void decode(const std::string& value, size_t prefix_length) {
-    m_size = *reinterpret_cast<const uint64_t*>(value.data() + prefix_length);
-    // printf("m_size is: %lld\n", m_size);
+  inline void decode(const char* data, size_t /*data_size*/, size_t prefix_length) {
+    m_size = *reinterpret_cast<const uint64_t*>(data + prefix_length);
     for (size_t m = 0; m < detail::words_for(m_size); m++) {
       size_t offset = prefix_length + sizeof(uint64_t) * (m + 1);
-      m_bits.push_back(*reinterpret_cast<const uint64_t*>(
-          value.data() + offset));
-      // printf("m_bit[%ld] is: %lld\n", m, m_bits[m]);
+      m_bits.push_back(*reinterpret_cast<const uint64_t*>(data + offset));
     }
+  }
+
+  inline void decode(const std::string& value, size_t prefix_length) {
+    decode(value.data(), value.size(), prefix_length);
   }
 
   inline size_t get_offset() {

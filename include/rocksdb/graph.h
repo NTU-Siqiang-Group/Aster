@@ -196,20 +196,20 @@ void inline encode_edges(
 }
 
 void inline decode_edges(
-    Edges* edges, const std::string& value, int encoding_type,
+    Edges* edges, const char* data, size_t data_size, int encoding_type,
     node_id_t universe = std::numeric_limits<uint32_t>::max()) {
   edges->nxts_out = nullptr;
   edges->nxts_in = nullptr;
-  edges->num_edges_out = *reinterpret_cast<const uint32_t*>(value.data());
+  edges->num_edges_out = *reinterpret_cast<const uint32_t*>(data);
   edges->num_edges_in =
-      *reinterpret_cast<const uint32_t*>(value.data() + sizeof(uint32_t));
+      *reinterpret_cast<const uint32_t*>(data + sizeof(uint32_t));
   if (encoding_type == ENCODING_TYPE_NONE) {
     edges->nxts_out = new Edge[edges->num_edges_out];
-    memcpy(edges->nxts_out, value.data() + sizeof(uint32_t) * 2,
+    memcpy(edges->nxts_out, data + sizeof(uint32_t) * 2,
            edges->num_edges_out * sizeof(Edge));
     edges->nxts_in = new Edge[edges->num_edges_in];
     memcpy(edges->nxts_in,
-           value.data() + sizeof(uint32_t) * 2 +
+           data + sizeof(uint32_t) * 2 +
                edges->num_edges_out * sizeof(Edge),
            edges->num_edges_in * sizeof(Edge));
   } else if (encoding_type == ENCODING_TYPE_EFP) {
@@ -220,7 +220,7 @@ void inline decode_edges(
 
     if (edges->num_edges_out > 0) {
       bit_vector_builder bvb_out;
-      bvb_out.decode(value, sizeof(uint32_t) * 2);
+      bvb_out.decode(data, data_size, sizeof(uint32_t) * 2);
       bit_vector bv_out(&bvb_out);
       typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_out(
           bv_out, 0, universe, edges->num_edges_out, params);
@@ -234,7 +234,7 @@ void inline decode_edges(
 
     if (edges->num_edges_in > 0) {
       bit_vector_builder bvb_in;
-      bvb_in.decode(value, sizeof(uint32_t) * 2 + out_offset);
+      bvb_in.decode(data, data_size, sizeof(uint32_t) * 2 + out_offset);
       bit_vector bv_in(&bvb_in);
       typename uniform_partitioned_sequence<indexed_sequence>::enumerator r_in(
           bv_in, 0, universe, edges->num_edges_in, params);
@@ -245,6 +245,12 @@ void inline decode_edges(
       }
     }
   }
+}
+
+void inline decode_edges(
+    Edges* edges, const std::string& value, int encoding_type,
+    node_id_t universe = std::numeric_limits<uint32_t>::max()) {
+  decode_edges(edges, value.data(), value.size(), encoding_type, universe);
 }
 
 void inline free_edges(Edges* edges) {
@@ -570,7 +576,7 @@ class RocksGraph {
 
   int AdaptPolicy(node_id_t src, double update_ratio, double lookup_ratio) {
     if (level_num_update_countdown == 0) {
-      level_num_update_countdown = 10000;
+      level_num_update_countdown = 100000;
       UpdateLevelNum();
     }
     level_num_update_countdown--;
