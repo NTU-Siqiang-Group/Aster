@@ -374,6 +374,8 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
 
   Status s;
   m++;
+  WriteBatch batch;
+  bool in_edge_handled = false;
 
   // we insert vertex 'to' into the out edge list of vertex 'from' at first
   // VertexKey v_out{.id = from, .type = KEY_TYPE_ADJENCENT_LIST};
@@ -394,10 +396,7 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     edges.nxts_out[0] = Edge{.nxt = to};
     encode_edges(&edges, &value_out, encoding_type_);
     free_edges(&edges);
-    s = db_->Merge(WriteOptions(), adj_cf_, key_out, value_out);
-    if (!s.ok() && !s.IsNotFound()) {
-      return s;
-    }
+    batch.Merge(adj_cf_, key_out, value_out);
   } else if (out_policy == EDGE_UPDATE_EAGER) {
     Edges existing_edges{.num_edges_out = 0, .num_edges_in = 0};
     s = GetAllEdges(from, &existing_edges);
@@ -419,65 +418,80 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
     else
       mor.AddCounter(from);
     if (is_merge) m--;
-    std::string new_value;
-    encode_edges(&new_edges, &new_value, encoding_type_);
-    free_edges(&existing_edges);
-    free_edges(&new_edges);
-    s = db_->Put(WriteOptions(), adj_cf_, key_out, new_value);
-    if (!s.ok() && !s.IsNotFound()) {
-      return s;
+    // For self-loops, also insert the in-edge in the same write
+    if (from == to) {
+      in_edge_handled = true;
+      Edges combined{.num_edges_out = new_edges.num_edges_out,
+                     .num_edges_in = new_edges.num_edges_in + 1};
+      combined.nxts_out = new_edges.nxts_out;
+      bool is_merge_in =
+          InsertToEdgeList(combined.nxts_in, new_edges.nxts_in,
+                           new_edges.num_edges_in, from);
+      if (is_merge_in)
+        combined.num_edges_in--;
+      else
+        mor.AddCounter(to);
+      std::string new_value;
+      encode_edges(&combined, &new_value, encoding_type_);
+      free_edges(&existing_edges);
+      // Free only nxts_in from new_edges (nxts_out moved to combined)
+      delete[] new_edges.nxts_in;
+      free_edges(&combined);
+      batch.Put(adj_cf_, key_out, new_value);
+    } else {
+      std::string new_value;
+      encode_edges(&new_edges, &new_value, encoding_type_);
+      free_edges(&existing_edges);
+      free_edges(&new_edges);
+      batch.Put(adj_cf_, key_out, new_value);
     }
   }
 
-  VertexKey v_in{.id = to};
-  std::string key_in, value_in;
-  encode_node(v_in, &key_in);
-  int in_policy = edge_update_policy_;
-  if (in_policy == EDGE_UPDATE_FULL_LAZY) {
-    encode_node_hash(v_in, from, &key_in);
-  }
-  if (in_policy == EDGE_UPDATE_ADAPTIVE) {
-    in_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
-  }
-  if (in_policy == EDGE_UPDATE_LAZY || in_policy == EDGE_UPDATE_FULL_LAZY) {
-    mor.AddCounter(to);
-    Edges edges{.num_edges_out = 0, .num_edges_in = 1};
-    edges.nxts_in = new Edge[1];
-    edges.nxts_in[0] = Edge{.nxt = from};
-    encode_edges(&edges, &value_in, encoding_type_);
-    free_edges(&edges);
-    s = db_->Merge(WriteOptions(), adj_cf_, key_in, value_in);
-    if (!s.ok() && !s.IsNotFound()) {
-      return s;
+  if (!in_edge_handled) {
+    VertexKey v_in{.id = to};
+    std::string key_in, value_in;
+    encode_node(v_in, &key_in);
+    int in_policy = edge_update_policy_;
+    if (in_policy == EDGE_UPDATE_FULL_LAZY) {
+      encode_node_hash(v_in, from, &key_in);
     }
-  } else if (in_policy == EDGE_UPDATE_EAGER) {
-    Edges existing_edges{.num_edges_out = 0, .num_edges_in = 0};
-    s = GetAllEdges(to, &existing_edges);
-    if (!s.ok() && !s.IsNotFound()) {
-      return s;
+    if (in_policy == EDGE_UPDATE_ADAPTIVE) {
+      in_policy = AdaptPolicy(from, update_ratio_, lookup_ratio_);
     }
-    Edges new_edges{.num_edges_out = existing_edges.num_edges_out,
-                    .num_edges_in = existing_edges.num_edges_in + 1};
-    // copy existing out edges
-    new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
-    memcpy(new_edges.nxts_out, existing_edges.nxts_out,
-           existing_edges.num_edges_out * sizeof(Edge));
-    bool is_merge = InsertToEdgeList(new_edges.nxts_in, existing_edges.nxts_in,
-                                     existing_edges.num_edges_in, from);
-    if (is_merge)
-      new_edges.num_edges_in--;
-    else
+    if (in_policy == EDGE_UPDATE_LAZY || in_policy == EDGE_UPDATE_FULL_LAZY) {
       mor.AddCounter(to);
-    std::string new_value;
-    encode_edges(&new_edges, &new_value, encoding_type_);
-    free_edges(&existing_edges);
-    free_edges(&new_edges);
-    s = db_->Put(WriteOptions(), adj_cf_, key_in, new_value);
-    if (!s.ok() && !s.IsNotFound()) {
-      return s;
+      Edges edges{.num_edges_out = 0, .num_edges_in = 1};
+      edges.nxts_in = new Edge[1];
+      edges.nxts_in[0] = Edge{.nxt = from};
+      encode_edges(&edges, &value_in, encoding_type_);
+      free_edges(&edges);
+      batch.Merge(adj_cf_, key_in, value_in);
+    } else if (in_policy == EDGE_UPDATE_EAGER) {
+      Edges existing_edges{.num_edges_out = 0, .num_edges_in = 0};
+      s = GetAllEdges(to, &existing_edges);
+      if (!s.ok() && !s.IsNotFound()) {
+        return s;
+      }
+      Edges new_edges{.num_edges_out = existing_edges.num_edges_out,
+                      .num_edges_in = existing_edges.num_edges_in + 1};
+      // copy existing out edges
+      new_edges.nxts_out = new Edge[existing_edges.num_edges_out];
+      memcpy(new_edges.nxts_out, existing_edges.nxts_out,
+             existing_edges.num_edges_out * sizeof(Edge));
+      bool is_merge = InsertToEdgeList(new_edges.nxts_in, existing_edges.nxts_in,
+                                       existing_edges.num_edges_in, from);
+      if (is_merge)
+        new_edges.num_edges_in--;
+      else
+        mor.AddCounter(to);
+      std::string new_value;
+      encode_edges(&new_edges, &new_value, encoding_type_);
+      free_edges(&existing_edges);
+      free_edges(&new_edges);
+      batch.Put(adj_cf_, key_in, new_value);
     }
   }
-  return s;
+  return db_->Write(WriteOptions(), &batch);
 }
 
 Status RocksGraph::AddVertexProperty(node_id_t id, Property prop) {
