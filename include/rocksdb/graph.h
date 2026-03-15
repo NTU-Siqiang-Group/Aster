@@ -148,6 +148,12 @@ void inline encode_edges(
   // copy the number of edges
   // value->append(reinterpret_cast<const char*>(edges), sizeof(int) +
   // edges->num_edges_out * sizeof(Edge));
+  // Pre-reserve capacity to avoid repeated reallocations
+  if (encoding_type == ENCODING_TYPE_NONE) {
+    value->reserve(value->size() + 2 * sizeof(uint32_t) +
+                   (edges->num_edges_out + edges->num_edges_in) *
+                       sizeof(node_id_t));
+  }
   int byte_to_fill = sizeof(edges->num_edges_out);
   for (int i = byte_to_fill - 1; i >= 0; i--) {
     value->push_back((edges->num_edges_out >> ((byte_to_fill - i - 1) << 3)) &
@@ -436,10 +442,8 @@ class RocksGraph {
     // }
     options.create_missing_column_families = true;
     std::vector<ColumnFamilyDescriptor> column_families;
-    if (edge_update_policy != EDGE_UPDATE_EAGER) {
-      options.merge_operator.reset(
-          new AdjacentListMergeOp(encoding_type_, &mor, m));
-    }
+    options.merge_operator.reset(
+        new AdjacentListMergeOp(encoding_type_, &mor, m));
     column_families.emplace_back(kDefaultColumnFamilyName, options);
     // switch to merge operator for properties
     options.merge_operator.reset(new PropertyMergeOp(encoding_type_));
@@ -479,6 +483,7 @@ class RocksGraph {
   node_id_t CountEdge();
   Status AddVertex(node_id_t id);
   Status AddEdge(node_id_t from, node_id_t to);
+  Status AddEdgeLazy(node_id_t from, node_id_t to);
   Status AddVertexProperty(node_id_t id, Property prop);
   Status AddEdgeProperty(node_id_t from, node_id_t to, Property prop);
   void AddVertexForBulkLoad() { n++; }

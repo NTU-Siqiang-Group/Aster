@@ -494,6 +494,41 @@ Status RocksGraph::AddEdge(node_id_t from, node_id_t to) {
   return db_->Write(WriteOptions(), &batch);
 }
 
+Status RocksGraph::AddEdgeLazy(node_id_t from, node_id_t to) {
+  m++;
+  WriteBatch batch;
+
+  // Forward edge: add 'to' to out-edge list of 'from'
+  {
+    VertexKey v{.id = from};
+    std::string key, value;
+    encode_node(v, &key);
+    mor.AddCounter(from);
+    Edges edges{.num_edges_out = 1, .num_edges_in = 0};
+    edges.nxts_out = new Edge[1];
+    edges.nxts_out[0] = Edge{.nxt = to};
+    encode_edges(&edges, &value, encoding_type_);
+    free_edges(&edges);
+    batch.Merge(adj_cf_, key, value);
+  }
+
+  // Reverse edge: add 'from' to in-edge list of 'to'
+  {
+    VertexKey v{.id = to};
+    std::string key, value;
+    encode_node(v, &key);
+    mor.AddCounter(to);
+    Edges edges{.num_edges_out = 0, .num_edges_in = 1};
+    edges.nxts_in = new Edge[1];
+    edges.nxts_in[0] = Edge{.nxt = from};
+    encode_edges(&edges, &value, encoding_type_);
+    free_edges(&edges);
+    batch.Merge(adj_cf_, key, value);
+  }
+
+  return db_->Write(WriteOptions(), &batch);
+}
+
 Status RocksGraph::AddVertexProperty(node_id_t id, Property prop) {
   VertexKey v{.id = id};
   std::string key, value;

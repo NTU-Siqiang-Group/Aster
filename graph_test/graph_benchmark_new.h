@@ -1371,6 +1371,149 @@ class GraphBenchmarkTool {
     }
   }
 
+  void AddEdgeLazyTest(node_id_t n, node_id_t m) {
+    if (n <= 0 || m <= 0) {
+      std::cout << "AddEdgeLazyTest skipped: invalid sizes." << std::endl;
+      return;
+    }
+    InitNodes(n);
+
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_int_distribution<node_id_t> dist(0, n - 1);
+
+    // Generate unique edges
+    std::vector<std::pair<node_id_t, node_id_t>> lazy_edges;
+    std::vector<std::pair<node_id_t, node_id_t>> regular_edges;
+    std::unordered_set<std::pair<node_id_t, node_id_t>, EdgePairHash>
+        unique_edges;
+
+    // Half via AddEdgeLazy, half via AddEdge
+    node_id_t lazy_count = m / 2;
+    node_id_t regular_count = m - lazy_count;
+
+    while (static_cast<node_id_t>(lazy_edges.size()) < lazy_count) {
+      node_id_t from = dist(rng);
+      node_id_t to = dist(rng);
+      std::pair<node_id_t, node_id_t> edge(from, to);
+      if (unique_edges.insert(edge).second) {
+        lazy_edges.push_back(edge);
+      }
+    }
+
+    while (static_cast<node_id_t>(regular_edges.size()) < regular_count) {
+      node_id_t from = dist(rng);
+      node_id_t to = dist(rng);
+      std::pair<node_id_t, node_id_t> edge(from, to);
+      if (unique_edges.insert(edge).second) {
+        regular_edges.push_back(edge);
+      }
+    }
+
+    // Add edges via AddEdgeLazy
+    for (const auto& edge : lazy_edges) {
+      Status s = graph_->AddEdgeLazy(edge.first, edge.second);
+      if (!s.ok()) {
+        std::cout << "AddEdgeLazy error: " << s.ToString() << std::endl;
+        exit(0);
+      }
+    }
+
+    // Add edges via regular AddEdge
+    for (const auto& edge : regular_edges) {
+      Status s = graph_->AddEdge(edge.first, edge.second);
+      if (!s.ok()) {
+        std::cout << "AddEdge error: " << s.ToString() << std::endl;
+        exit(0);
+      }
+    }
+
+    // Build expected state
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_out;
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>> expected_in;
+    for (const auto& edge : lazy_edges) {
+      expected_out[edge.first].insert(edge.second);
+      expected_in[edge.second].insert(edge.first);
+    }
+    for (const auto& edge : regular_edges) {
+      expected_out[edge.first].insert(edge.second);
+      expected_in[edge.second].insert(edge.first);
+    }
+
+    // Verify
+    size_t mismatch_nodes = 0;
+    size_t mismatch_edges = 0;
+    for (node_id_t node = 0; node < n; ++node) {
+      Edges edges_read;
+      Status s = graph_->GetAllEdges(node, &edges_read);
+      std::unordered_set<node_id_t> got_out;
+      std::unordered_set<node_id_t> got_in;
+      if (s.ok()) {
+        for (uint32_t i = 0; i < edges_read.num_edges_out; ++i) {
+          got_out.insert(edges_read.nxts_out[i].nxt);
+        }
+        for (uint32_t i = 0; i < edges_read.num_edges_in; ++i) {
+          got_in.insert(edges_read.nxts_in[i].nxt);
+        }
+        free_edges(&edges_read);
+      } else if (!s.IsNotFound()) {
+        std::cout << "get error: " << s.ToString() << std::endl;
+        exit(0);
+      }
+
+      const auto& exp_out = expected_out[node];
+      const auto& exp_in = expected_in[node];
+
+      bool match = true;
+      if (got_out.size() != exp_out.size() ||
+          got_in.size() != exp_in.size()) {
+        match = false;
+      } else {
+        for (const auto& nb : exp_out) {
+          if (got_out.find(nb) == got_out.end()) { match = false; break; }
+        }
+        if (match) {
+          for (const auto& nb : exp_in) {
+            if (got_in.find(nb) == got_in.end()) { match = false; break; }
+          }
+        }
+      }
+      if (!match) {
+        mismatch_nodes++;
+        if (mismatch_nodes <= 10) {
+          std::cout << "Mismatch node " << node
+                    << " (out: got=" << got_out.size()
+                    << " exp=" << exp_out.size()
+                    << ", in: got=" << got_in.size()
+                    << " exp=" << exp_in.size() << ")" << std::endl;
+        }
+        for (const auto& nb : exp_out) {
+          if (got_out.find(nb) == got_out.end()) mismatch_edges++;
+        }
+        for (const auto& nb : got_out) {
+          if (exp_out.find(nb) == exp_out.end()) mismatch_edges++;
+        }
+        for (const auto& nb : exp_in) {
+          if (got_in.find(nb) == got_in.end()) mismatch_edges++;
+        }
+        for (const auto& nb : got_in) {
+          if (exp_in.find(nb) == exp_in.end()) mismatch_edges++;
+        }
+      }
+    }
+
+    std::cout << "AddEdgeLazyTest result: nodes=" << n
+              << " lazy_edges=" << lazy_count
+              << " regular_edges=" << regular_count
+              << " mismatched_nodes=" << mismatch_nodes
+              << " mismatch_edges=" << mismatch_edges << std::endl;
+    if (mismatch_nodes == 0) {
+      std::cout << "AddEdgeLazyTest: PASS" << std::endl;
+    } else {
+      std::cout << "AddEdgeLazyTest: FAIL" << std::endl;
+    }
+  }
+
  private:
   RocksGraph* graph_;
   GraphBenchProfiler profiler_;
